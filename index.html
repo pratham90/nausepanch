@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Savor Clone</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'cream': '#FFF9EB',
+            'brand-brown': '#370808',
+            'brand-brown-light': '#a5957e',
+          },
+          fontFamily: {
+            'sans': ['Manrope', 'sans-serif'],
+            'serif': ['Playfair Display', 'serif'],
+          }
+        }
+      }
+    }
+    </script>
+    <style>
+        html {
+            scroll-behavior: smooth;
+        }
+        body {
+            font-family: 'Manrope', sans-serif;
+            background-color: #FFF9EB;
+            color: #370808;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        @keyframes bounce-slow {
+          0%, 100% {
+            transform: translateY(-15%);
+            animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+          }
+          50% {
+            transform: translateY(0);
+            animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+          }
+        }
+        .animate-bounce-slow {
+          animation: bounce-slow 2s infinite;
+        }
+        .sticky-container > div {
+            will-change: transform;
+        }
+        .char-reveal-container {
+            display: inline-block;
+            overflow: hidden;
+        }
+        .char-reveal {
+            display: inline-block;
+            transform: translateY(110%);
+            will-change: transform;
+        }
+        .link-underline {
+            position: relative;
+            display: inline-block;
+        }
+        .link-underline::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 100%;
+            height: 1px;
+            background-color: currentColor;
+            transform: scaleX(0);
+            transform-origin: right;
+            transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        .link-underline:hover::after {
+            transform: scaleX(1);
+            transform-origin: left;
+        }
+        .stroked-path {
+            stroke-dasharray: 1;
+            stroke-dashoffset: 1;
+            transition: stroke-dashoffset 0.5s ease-out;
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="/index.tsx"></script>
+<script>
+
+  (function() {
+    const easeInOutCubic = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+    function animateScroll(targetY, duration = 600) {
+      const startY = window.scrollY || window.pageYOffset;
+      const diff = targetY - startY;
+      let start;
+
+      return new Promise(resolve => {
+        function step(timestamp) {
+          if (!start) start = timestamp;
+          const time = Math.min(1, (timestamp - start) / duration);
+          const eased = easeInOutCubic(time);
+          window.scrollTo(0, Math.round(startY + diff * eased));
+          if (time < 1) {
+            requestAnimationFrame(step);
+          } else {
+            resolve();
+          }
+        }
+        requestAnimationFrame(step);
+      });
+    }
+
+    document.addEventListener('click', function (e) {
+      const el = e.target.closest && e.target.closest('a[href^="#"]');
+      if (!el) return;
+      const href = el.getAttribute('href');
+      if (!href || href === '#') return;
+      const target = document.querySelector(href);
+      if (!target) return;
+
+      e.preventDefault();
+      const rect = target.getBoundingClientRect();
+      const targetY = rect.top + window.pageYOffset;
+      animateScroll(targetY, 700).then(() => {
+       
+        history.replaceState(null, '', href);
+      });
+    }, { passive: false });
+
+    
+    window.addEventListener('load', () => {
+      if (location.hash) {
+        const target = document.querySelector(location.hash);
+        if (target) {
+          const rect = target.getBoundingClientRect();
+          const targetY = rect.top + window.pageYOffset;
+         
+          setTimeout(() => animateScroll(targetY, 700), 80);
+        }
+      }
+    });
+  })();
+</script>
+</body>
+</html>
