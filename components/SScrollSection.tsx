@@ -24,39 +24,53 @@ const processSteps = [
 const AnimatedContentBlock: React.FC<{ item: typeof processSteps[0] }> = ({ item }) => {
     const ref = useRef<HTMLDivElement>(null);
     const [progress, setProgress] = useState(0);
+    const animationFrameId = useRef<number | null>(null);
 
     useEffect(() => {
         const handleScroll = () => {
-            if (ref.current) {
-                const rect = ref.current.getBoundingClientRect();
-                const windowHeight = window.innerHeight;
-              
-                const start = windowHeight;
-                const end = windowHeight * 0.3;
-                const rawProgress = (start - rect.top) / (start - end);
-                setProgress(Math.max(0, Math.min(1, rawProgress)));
+            if (animationFrameId.current) {
+                cancelAnimationFrame(animationFrameId.current);
             }
+            animationFrameId.current = requestAnimationFrame(() => {
+                if (ref.current) {
+                    const rect = ref.current.getBoundingClientRect();
+                    const windowHeight = window.innerHeight;
+                  
+                    const start = windowHeight * 0.85;
+                    const end = windowHeight * 0.25;
+                    const rawProgress = (start - rect.top) / (start - end);
+                    setProgress(Math.max(0, Math.min(1, rawProgress)));
+                }
+            });
         };
         window.addEventListener('scroll', handleScroll, { passive: true });
         handleScroll();
-        return () => window.removeEventListener('scroll', handleScroll);
+        return () => {
+            window.removeEventListener('scroll', handleScroll);
+            if (animationFrameId.current) {
+                cancelAnimationFrame(animationFrameId.current);
+            }
+        };
     }, []);
 
     const isImageLeft = item.align === 'left';
 
-    const transition = 'opacity 0.4s ease-out, transform 0.4s ease-out';
-
+    const easedProgress = progress < 0.5 
+        ? 4 * progress * progress * progress 
+        : 1 - Math.pow(-2 * progress + 2, 3) / 2;
 
     const imageStyle: React.CSSProperties = {
-        transition,
-        opacity: progress,
-        transform: `translateX(${isImageLeft ? (-30 * (1 - progress)) : (30 * (1 - progress))}px)`
+        opacity: easedProgress,
+        transform: `translateX(${isImageLeft ? (-50 * (1 - easedProgress)) : (50 * (1 - easedProgress))}px) translateY(${20 * (1 - easedProgress)}px)`,
+        transition: 'none',
+        willChange: 'transform, opacity'
     };
 
     const textStyle: React.CSSProperties = {
-        transition,
-        opacity: progress,
-        transform: `translateX(${isImageLeft ? (30 * (1 - progress)) : (-30 * (1 - progress))}px)`
+        opacity: easedProgress,
+        transform: `translateX(${isImageLeft ? (50 * (1 - easedProgress)) : (-50 * (1 - easedProgress))}px) translateY(${20 * (1 - easedProgress)}px)`,
+        transition: 'none',
+        willChange: 'transform, opacity'
     };
 
     return (
@@ -78,14 +92,14 @@ const AnimatedContentBlock: React.FC<{ item: typeof processSteps[0] }> = ({ item
 
 const SScrollSection: React.FC = () => {
     return (
-        <section className="bg-cream text-brand-brown py-20 md:py-32">
-            <div className="container mx-auto px-4 max-w-5xl">
-                <div className="text-center mb-20 md:mb-28">
-                    <h2 className="font-serif text-4xl md:text-5xl mb-4">How it's made</h2>
-                    <p className="text-brand-brown-light text-lg">A process that's better for you, and the planet.</p>
+        <section className="bg-cream text-brand-brown py-24 md:py-40">
+            <div className="container mx-auto px-4 md:px-8 max-w-6xl">
+                <div className="text-center mb-24 md:mb-36">
+                    <h2 className="font-serif text-5xl md:text-6xl mb-6">How it's made</h2>
+                    <p className="text-brand-brown-light text-lg md:text-xl">A process that's better for you, and the planet.</p>
                 </div>
 
-                <div className="space-y-24 md:space-y-32">
+                <div className="space-y-32 md:space-y-48">
                     {processSteps.map((step, index) => (
                         <AnimatedContentBlock key={index} item={step} />
                     ))}

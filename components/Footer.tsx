@@ -12,16 +12,16 @@ const SavorWordReveal: React.FC<{ text: string }> = ({ text }) => {
             const { top } = el.getBoundingClientRect();
             const viewportHeight = window.innerHeight;
             
-          
-            const animStartPoint = viewportHeight;
-
-            const animEndPoint = viewportHeight * 0.2;
+            const animStartPoint = viewportHeight * 0.9;
+            const animEndPoint = viewportHeight * 0.15;
             const animRange = animStartPoint - animEndPoint;
 
-       
-            const currentProgress = 1 - Math.max(0, Math.min(1, (top - animEndPoint) / animRange));
+            const rawProgress = 1 - Math.max(0, Math.min(1, (top - animEndPoint) / animRange));
+            const easedProgress = rawProgress < 0.5 
+                ? 4 * rawProgress * rawProgress * rawProgress 
+                : 1 - Math.pow(-2 * rawProgress + 2, 3) / 2;
             
-            setProgress(currentProgress);
+            setProgress(easedProgress);
         };
         
         let animationFrameId: number | null = null;
@@ -42,16 +42,15 @@ const SavorWordReveal: React.FC<{ text: string }> = ({ text }) => {
     const textChars = text.split('');
     const numChars = textChars.length;
 
-    const fadeDuration = 0.5;
-   
+    const fadeDuration = 0.4;
     const staggerRange = 1.0 - fadeDuration;
 
     return (
         <h1
             ref={ref}
-            className="font-serif text-[35vw] md:text-[30vw] lg:text-[28vw] leading-none text-brand-brown select-none flex justify-center"
+            className="font-serif text-[35vw] md:text-[30vw] lg:text-[26vw] leading-none text-brand-brown select-none flex justify-center"
             style={{ 
-                transform: 'scaleY(1.5)',
+                transform: 'scaleY(1.6)',
             }}
             aria-label={text}
         >
@@ -86,8 +85,8 @@ const Footer: React.FC = () => {
     const legalLinks = ["Press Kit", "Terms of Service", "Privacy Policy"];
     
     return (
-        <footer className="bg-cream text-brand-brown pt-16 md:pt-24 pb-8 overflow-hidden">
-            <div className="container mx-auto px-6">
+        <footer className="bg-cream text-brand-brown pt-20 md:pt-32 pb-10 overflow-hidden">
+            <div className="container mx-auto px-6 md:px-8">
                 
               
                 <div className="flex flex-col md:flex-row justify-between items-start text-sm mb-24 md:mb-32">

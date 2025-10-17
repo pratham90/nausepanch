@@ -12,7 +12,7 @@ const images = [
 const ParallaxImage: React.FC<{ src: string; alt: string; className?: string; parallaxFactor: number; }> = ({ src, alt, className, parallaxFactor }) => {
     const ref = useRef<HTMLDivElement>(null);
     const [style, setStyle] = useState<React.CSSProperties>({
-        transform: 'scale(1.05)',
+        transform: 'scale(1.08) translateY(30px)',
         opacity: 0,
         willChange: 'transform, opacity',
     });
@@ -27,15 +27,20 @@ const ParallaxImage: React.FC<{ src: string; alt: string; className?: string; pa
                 if (top < viewportHeight && top + height > 0) {
                     const translateY = top * parallaxFactor;
 
-                    const revealStartPoint = viewportHeight;
-                    const revealEndPoint = viewportHeight * 0.5;
+                    const revealStartPoint = viewportHeight * 0.95;
+                    const revealEndPoint = viewportHeight * 0.4;
                     const revealProgress = Math.min(1, Math.max(0, (revealStartPoint - top) / (revealStartPoint - revealEndPoint)));
                     
-                    const scale = 1.05 - (0.05 * revealProgress);
-                    const opacity = revealProgress;
+                    const easedProgress = revealProgress < 0.5 
+                        ? 4 * revealProgress * revealProgress * revealProgress 
+                        : 1 - Math.pow(-2 * revealProgress + 2, 3) / 2;
+                    
+                    const scale = 1.08 - (0.08 * easedProgress);
+                    const opacity = easedProgress;
+                    const initialY = 30 * (1 - easedProgress);
 
                     setStyle({
-                        transform: `translateY(${translateY}px) scale(${scale})`,
+                        transform: `translateY(${translateY + initialY}px) scale(${scale})`,
                         opacity: opacity,
                         willChange: 'transform, opacity',
                     });
@@ -79,22 +84,22 @@ const ParallaxImage: React.FC<{ src: string; alt: string; className?: string; pa
 
 const EntrypointVertical: React.FC = () => {
     return (
-        <section className="bg-cream text-brand-brown py-20 md:py-40">
-            <div className="container mx-auto px-4">
-                <div className="text-center mb-16 md:mb-24 max-w-3xl mx-auto">
+        <section className="bg-cream text-brand-brown py-24 md:py-48">
+            <div className="container mx-auto px-4 md:px-8">
+                <div className="text-center mb-20 md:mb-32 max-w-3xl mx-auto">
                     <img 
                         src="https://www.savor.it/_nuxt/img/realfats.92a2113.svg" 
                         alt="Real fats, real flavor."
-                        className="w-full h-auto mx-auto max-w-lg mb-6"
+                        className="w-full h-auto mx-auto max-w-lg mb-8"
                     />
-                    <p className="text-md sm:text-lg text-brand-brown-light">
+                    <p className="text-lg sm:text-xl text-brand-brown-light leading-relaxed">
                         All our old favorites, just made a different way.
                     </p>
-                    <a href="#" className="mt-8 group relative inline-flex items-center justify-center overflow-hidden rounded-full bg-transparent border border-brand-brown-light/50 px-8 py-3 text-sm font-medium text-brand-brown transition-all duration-300 hover:bg-brand-brown/5">
+                    <a href="#" className="mt-10 group relative inline-flex items-center justify-center overflow-hidden rounded-full bg-transparent border border-brand-brown-light/50 px-8 py-3 text-sm font-medium text-brand-brown transition-all duration-500 hover:bg-brand-brown/5">
                         <span className="link-underline">Our Foods</span>
                     </a>
                 </div>
-                <div className="grid grid-cols-12 gap-y-12 md:gap-y-24 gap-x-8">
+                <div className="grid grid-cols-12 gap-y-16 md:gap-y-28 gap-x-8">
                     {images.map((img) => (
                        <ParallaxImage key={img.src} src={img.src} alt={img.alt} className={img.className} parallaxFactor={img.parallaxFactor}/>
                     ))}

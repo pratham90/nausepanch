@@ -23,11 +23,11 @@ const LogoBox: React.FC<{ logo: Logo; className?: string; imgClassName?: string;
     
     return (
         <div className={`flex justify-center items-center ${className || ''}`}>
-            <div className={`p-4 sm:p-6 transition-colors duration-300 ease-in-out ${isStatic ? boxColor : 'hover:bg-[#FBF4E4]'}`}>
+            <div className={`p-5 sm:p-7 transition-all duration-500 ease-out ${isStatic ? boxColor : 'hover:bg-[#FBF4E4] hover:scale-105'}`}>
                 <img 
                     src={logo.src} 
                     alt={logo.alt} 
-                    className={`w-auto ${imgClassName}`}
+                    className={`w-auto opacity-90 transition-opacity duration-300 hover:opacity-100 ${imgClassName}`}
                 />
             </div>
         </div>
@@ -37,27 +37,27 @@ const LogoBox: React.FC<{ logo: Logo; className?: string; imgClassName?: string;
 
 const PressGrid: React.FC = () => {
     return (
-        <section className="bg-cream text-brand-brown py-20 md:py-24">
-            <div className="container mx-auto px-4">
-                <h3 className="text-center font-serif text-4xl md:text-5xl mb-20">In the press</h3>
+        <section className="bg-cream text-brand-brown py-24 md:py-32">
+            <div className="container mx-auto px-4 md:px-8">
+                <h3 className="text-center font-serif text-5xl md:text-6xl mb-24 md:mb-32">In the press</h3>
                 
-                <div className="flex flex-col items-center max-w-4xl mx-auto">
+                <div className="flex flex-col items-center max-w-5xl mx-auto">
                 
-                    <div className="w-full grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-12 items-center">
+                    <div className="w-full grid grid-cols-2 md:grid-cols-4 gap-x-12 gap-y-16 items-center">
                         {pressLogosRow1.map((logo) => (
-                           <LogoBox key={logo.alt} logo={logo} imgClassName="max-h-8" />
+                           <LogoBox key={logo.alt} logo={logo} imgClassName="max-h-9" />
                         ))}
                     </div>
                     
                  
-                    <div className="mt-16 w-full max-w-lg grid grid-cols-2 gap-x-8 items-center justify-items-center">
+                    <div className="mt-20 w-full max-w-xl grid grid-cols-2 gap-x-12 items-center justify-items-center">
                        {pressLogosRow2.map((logo) => (
                            <LogoBox 
                                 key={logo.alt} 
                                 logo={logo}
-                                imgClassName="max-h-12"
+                                imgClassName="max-h-14"
                                 isStatic={logo.alt === 'Time'}
-                                className={logo.alt === 'Time' ? 'w-full max-w-[200px]' : ''}
+                                className={logo.alt === 'Time' ? 'w-full max-w-[220px]' : ''}
                            />
                         ))}
                     </div>
