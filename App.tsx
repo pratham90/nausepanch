@@ -16,8 +16,6 @@ const App: React.FC = () => {
         <div data-nav-color="cream"><Hero /></div>
         <div data-nav-color="brown" id="process"><StoryCanvas /></div>
         <div data-nav-color="brown"><EntrypointVertical /></div>
-        <div data-nav-color="cream"><SScrollSection /></div>
-        <div data-nav-color="cream"><FullBleedBanner /></div>
         <div data-nav-color="cream"><PressGrid /></div>
         <div data-nav-color="brown"><Footer /></div>
       </main>

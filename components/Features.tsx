@@ -62,7 +62,7 @@ export default function StoryCanvas() {
   };
   const headlineRef = useRef<HTMLHeadingElement | null>(null);
   const sideCopyRef = useRef<HTMLDivElement | null>(null);
-  const OUTRO_IMAGES = ["/one.png", "/two.png", "/three.png", "/four.png", "/five.png"];
+  const OUTRO_IMAGES = ["/1.jpg", "/2.jpg", "/3.jpg", "/4.jpg", "/5.jpg"];
 
   useLayoutEffect(() => {
     const ctx = gsap.context(() => {
@@ -378,6 +378,7 @@ export default function StoryCanvas() {
       </div>
 
       <style jsx>{`
+        @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;500;600;700&display=swap');
         .story-root { position: relative; width: 100%; height: 800vh; background: #fcf7ea; color: #fff; }
         .stage { position: sticky; top: 0; height: 100vh; width: 100%; overflow: hidden; isolation: isolate; will-change: clip-path; }
         .underlay { position: absolute; inset: 0; background: #0b0b0b; z-index: 0; }
@@ -509,9 +510,9 @@ export default function StoryCanvas() {
         .outro-frame { display: none; }
         .outro-scene { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: 0; }
 
-        .outro-headline { position: absolute; left: 6%; bottom: 8%; margin: 0; color: #3c1915; font-family: "Playfair Display", "Cormorant Garamond", ui-serif, Georgia, "Times New Roman", Times, serif; font-weight: 700; line-height: .92; font-size: clamp(28px, 11vw, 142px); letter-spacing: -.02em; z-index: 6; }
+        .outro-headline { position: absolute; left: 6%; bottom: 8%; margin: 0; color: #3c1915; font-family: 'Dancing Script', cursive; font-weight: 700; line-height: .92; font-size: clamp(28px, 11vw, 142px); letter-spacing: -.01em; z-index: 6; }
         .outro-headline .br { display: block; }
-        .outro-side { position: absolute; top: 22%; left: 62%; width: 28vw; color: #3c1915; font-family: ui-serif, Georgia, "Times New Roman", Times, serif; font-size: clamp(14px, 1.4vw, 20px); line-height: 1.5; z-index: 6; }
+        .outro-side { position: absolute; top: 22%; left: 68%; width: 26vw; color: #3c1915; font-family: ui-serif, Georgia, "Times New Roman", Times, serif; font-size: clamp(14px, 1.4vw, 20px); line-height: 1.5; z-index: 7; }
         .outro-cta { margin-top: 16px; background: #efe4d2; color: #3c1915; border: none; padding: 10px 18px; border-radius: 6px; font-family: inherit; font-size: clamp(12px, 1.2vw, 16px); display: inline-flex; align-items: center; gap: 12px; box-shadow: 0 0 0 1px rgba(0,0,0,.04) inset; }
         .outro-cta .dash { display: inline-block; width: 36px; height: 1px; background: currentColor; opacity: .6; }
 
@@ -539,7 +540,7 @@ export default function StoryCanvas() {
 
           .outro-frame { display: none; }
           .outro-headline { left: 5%; bottom: 8%; font-size: 16vw; }
-          .outro-side { top: 28%; left: 56%; width: 40vw; font-size: 4vw; }
+          .outro-side { top: 28%; left: 62%; width: 36vw; font-size: 4vw; }
           .outro-cta { padding: 12px 16px; gap: 10px; }
         }
       `}</style>

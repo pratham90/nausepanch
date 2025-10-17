@@ -1,112 +1,256 @@
-import React, { useRef, useState, useEffect } from 'react';
+"use client";
 
-const images = [
-  { src: "https://cdn.sanity.io/images/jqzja4ip/production/29cecd77efbdc0e3e5def3c30ae7a368de55281a-2880x1920.png?rect=0,109,2880,1703&w=793&h=469&fm=webp&q=90", alt: "A dollop of cultured butter on a rustic slice of bread", className: "col-span-12 md:col-span-8 md:col-start-3", parallaxFactor: 0.15 },
-  { src: "https://cdn.sanity.io/images/jqzja4ip/production/226d3f7cd9e45264d5bf5de0003c68d61c9998b-5500x3684.jpg?rect=0,216,5500,3253&w=793&h=469&fm=webp&q=90", alt: "A stack of fluffy pancakes topped with a melting pat of butter", className: "col-span-12 md:col-span-7 md:col-start-1", parallaxFactor: 0.25 },
-  { src: "https://cdn.sanity.io/images/jqzja4ip/production/a180c39f450d2cc846adbcede2940a1170a47743-4608x2592.jpg?rect=113,0,4383,2592&w=793&h=469&fm=webp&q=90", alt: "A golden-brown, flaky croissant on a simple plate", className: "col-span-12 md:col-span-9 md:col-start-4", parallaxFactor: 0.1 },
-  { src: "https://cdn.sanity.io/images/jqzja4ip/production/cbcf81531e7583abc04075e566e6933ceb629ba1-2880x1920.png?rect=96,0,2688,1920&w=658&h=470&fm=webp&q=90", alt: "A gourmet pasta dish with a creamy sauce and fresh herbs", className: "col-span-12 md:col-span-6 md:col-start-2", parallaxFactor: 0.2 },
-  { src: "https://cdn.sanity.io/images/jqzja4ip/production/27baef14621728e4d8f2a7092155c1b9a36003da-2880x1920.png?rect=297,0,2286,1920&w=450&h=378&fm=webp&q=90", alt: "A close-up of a savory dish with grains and greens", className: "col-span-12 md:col-span-5 md:col-start-7", parallaxFactor: 0.3 },
-  { src: "https://cdn.sanity.io/images/jqzja4ip/production/b49b0acdd0afea0944f7396039984e4b800daa5f-2880x1920.png?rect=0,56,2880,1808&w=352&h=221&fm=webp&q=90", alt: "Freshly baked bread with a crisp crust", className: "col-span-12 md:col-span-7 md:col-start-3", parallaxFactor: 0.18 }
-];
+import { useEffect, useMemo, useRef } from "react";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+gsap.registerPlugin(ScrollTrigger);
 
-const ParallaxImage: React.FC<{ src: string; alt: string; className?: string; parallaxFactor: number; }> = ({ src, alt, className, parallaxFactor }) => {
-    const ref = useRef<HTMLDivElement>(null);
-    const [style, setStyle] = useState<React.CSSProperties>({
-        transform: 'scale(1.08) translateY(30px)',
-        opacity: 0,
-        willChange: 'transform, opacity',
-    });
-    const animationFrameId = useRef<number | null>(null);
+export default function TrainNudgeScroll() {
+  const IMAGES = [
+    "/1.jpg","/2.jpg","/3.jpg","/4.jpg",
+    "/1.jpg","/2.jpg","/3.jpg","/4.jpg",
+    "/1.jpg","/2.jpg","/3.jpg",
+  ];
 
-    useEffect(() => {
-        const handleScroll = () => {
-            if (ref.current) {
-                const { top, height } = ref.current.getBoundingClientRect();
-                const viewportHeight = window.innerHeight;
+  // content text → words
+  const line1Words = useMemo(() => "Real fats,".split(" "), []);
+  const line2Words = useMemo(() => "real flavor.".split(" "), []);
+  const paraWords  = useMemo(
+    () => "All our old favorites, just made a different way.".split(" "),
+    []
+  );
 
-                if (top < viewportHeight && top + height > 0) {
-                    const translateY = top * parallaxFactor;
+  // refs (existing sections)
+  const topRef = useRef<HTMLDivElement>(null);
+  const finalRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const l1Ref = useRef<HTMLDivElement>(null);
+  const l2Ref = useRef<HTMLDivElement>(null);
+  const pRef  = useRef<HTMLDivElement>(null);
+  const ctaRef= useRef<HTMLButtonElement>(null);
 
-                    const revealStartPoint = viewportHeight * 0.95;
-                    const revealEndPoint = viewportHeight * 0.4;
-                    const revealProgress = Math.min(1, Math.max(0, (revealStartPoint - top) / (revealStartPoint - revealEndPoint)));
-                    
-                    const easedProgress = revealProgress < 0.5 
-                        ? 4 * revealProgress * revealProgress * revealProgress 
-                        : 1 - Math.pow(-2 * revealProgress + 2, 3) / 2;
-                    
-                    const scale = 1.08 - (0.08 * easedProgress);
-                    const opacity = easedProgress;
-                    const initialY = 30 * (1 - easedProgress);
+  // CURTAIN refs (image behind, section itself bg = page color)
+  const curtainRef     = useRef<HTMLDivElement>(null);   // whole section
+  const curtainImgRef  = useRef<HTMLImageElement>(null); // bg image that slides in
+  const curtainTxtRef  = useRef<HTMLDivElement>(null);   // text block
 
-                    setStyle({
-                        transform: `translateY(${translateY + initialY}px) scale(${scale})`,
-                        opacity: opacity,
-                        willChange: 'transform, opacity',
-                    });
-                }
-            }
-        };
+  // sizes
+  const WRAP_W = "min(72vw, 880px)";
+  const WRAP_H = "52.5vh";
+  const LAST_SIZE = "34vh";
 
-        const onScroll = () => {
-            if (animationFrameId.current) {
-                cancelAnimationFrame(animationFrameId.current);
-            }
-            animationFrameId.current = requestAnimationFrame(handleScroll);
-        };
-        
-        window.addEventListener('scroll', onScroll, { passive: true });
-   
-        requestAnimationFrame(handleScroll);
-        
-        return () => {
-            window.removeEventListener('scroll', onScroll);
-            if(animationFrameId.current) {
-                cancelAnimationFrame(animationFrameId.current);
-            }
-        };
-    }, [parallaxFactor]);
+  // nudge / zoom (width-only)
+  const TOP_DELTA = 12, TOP_FROM_X = 1.12, TOP_TO_X = 0.90;
+  const LAST_DELTA = 14, LAST_FROM_X = 1.10, LAST_TO_X = 0.92;
 
-    return (
-        <div ref={ref} className={className}>
-             <div className="overflow-hidden rounded-md shadow-lg bg-brand-brown-light/10">
-                <img 
-                    src={src} 
-                    alt={alt} 
-                    className="w-full h-auto object-cover" 
-                    style={style}
+  const baseImgScaleX = (i: number) => {
+    if (i <= 3) return 1.0;
+    const f = 1 - Math.min((i - 3) * 0.012, 0.06);
+    return Number(f.toFixed(3));
+  };
+
+  useEffect(() => {
+    const applyNudge = (
+      nodes: Element[] | NodeListOf<Element>,
+      opts: { delta: number; start: string; end: string; fromScaleX: number; toScaleX: number }
+    ) => {
+      const { delta, start, end, fromScaleX, toScaleX } = opts;
+      gsap.utils.toArray<HTMLImageElement>(nodes).forEach((img, i) => {
+        const dir = i % 2 === 0 ? -1 : 1;
+        gsap.set(img, {
+          xPercent: dir * delta,
+          scaleX: fromScaleX,
+          scaleY: 1,
+          willChange: "transform",
+          transformOrigin: i % 2 === 0 ? "left center" : "right center",
+        });
+        gsap.to(img, {
+          xPercent: -dir * delta,
+          scaleX: toScaleX,
+          ease: "none",
+          scrollTrigger: { trigger: img, start, end, scrub: true },
+        });
+      });
+    };
+
+    // image sequences
+    if (topRef.current) {
+      applyNudge(topRef.current.querySelectorAll("img[data-nudge]"), {
+        delta: TOP_DELTA, start: "top 80%", end: "bottom 20%", fromScaleX: TOP_FROM_X, toScaleX: TOP_TO_X,
+      });
+    }
+    if (finalRef.current) {
+      applyNudge(finalRef.current.querySelectorAll("img[data-nudge-final]"), {
+        delta: LAST_DELTA, start: "top 90%", end: "bottom 10%", fromScaleX: LAST_FROM_X, toScaleX: LAST_TO_X,
+      });
+    }
+
+    // right content (smooth pops)
+    if (contentRef.current) {
+      const popWords = (container: HTMLElement | null, delay = 0) => {
+        if (!container) return;
+        const words = container.querySelectorAll<HTMLElement>("[data-word]");
+        gsap.set(words, { opacity: 0, scale: 0.85, y: 18 });
+        gsap.to(words, {
+          opacity: 1, scale: 1, y: 0, duration: 0.5, ease: "back.out(1.8)", stagger: 0.06, delay,
+          scrollTrigger: { trigger: contentRef.current!, start: "top 76%", toggleActions: "play none none reverse" },
+        });
+      };
+      popWords(l1Ref.current);
+      popWords(l2Ref.current, 0.08);
+
+      const pWords = pRef.current?.querySelectorAll<HTMLElement>("[data-word]");
+      if (pWords) {
+        gsap.set(pWords, { opacity: 0, scale: 0.85, y: 14 });
+        gsap.to(pWords, {
+          opacity: 1, scale: 1, y: 0, duration: 0.44, ease: "back.out(1.7)", stagger: 0.045, delay: 0.14,
+          scrollTrigger: { trigger: contentRef.current!, start: "top 76%", toggleActions: "play none none reverse" },
+        });
+      }
+
+      if (ctaRef.current) {
+        gsap.set(ctaRef.current, { opacity: 0, scale: 0.9, y: 10 });
+        gsap.to(ctaRef.current, {
+          opacity: 1, scale: 1, y: 0, duration: 0.5, ease: "back.out(2)", delay: 0.22,
+          scrollTrigger: { trigger: contentRef.current!, start: "top 76%", toggleActions: "play none none reverse" },
+        });
+      }
+    }
+
+    // ============ CURTAIN SECTION (no overlay; image slides in) ============
+    if (curtainRef.current && curtainImgRef.current && curtainTxtRef.current) {
+      const img = curtainImgRef.current;
+      const txt = curtainTxtRef.current;
+
+      // image starts fully above the section; then slides down behind the text
+      gsap.set(img, { yPercent: -100, scale: 1.06, willChange: "transform" }); // slight zoom for luxe feel
+      gsap.to(img, {
+        yPercent: 0,
+        scale: 1,
+        ease: "power3.out",
+        scrollTrigger: {
+          trigger: curtainRef.current,
+          start: "top 85%",
+          end: "bottom 20%",
+          scrub: 1, // tied to scroll = true curtain feel
+        },
+      });
+
+      // text pops when content comes into view (always on top)
+      const words = txt.querySelectorAll<HTMLElement>("[data-word]");
+      gsap.set(words, { opacity: 0, scale: 0.9, y: 16 });
+      gsap.to(words, {
+        opacity: 1, scale: 1, y: 0, duration: 0.55, ease: "back.out(1.9)", stagger: 0.07,
+        scrollTrigger: {
+          trigger: curtainRef.current,
+          start: "top 78%",
+          toggleActions: "play none none reverse",
+        },
+      });
+    }
+  }, []);
+
+  return (
+    <div className="bg-[#fbf2e2] overflow-hidden">
+      {/* ===== TOP 8 ===== */}
+      <section ref={topRef} className="mx-auto max-w-[1200px] px-4 leading-none">
+        {IMAGES.slice(0, 8).map((src, i) => (
+          <figure
+            key={i}
+            className={`relative mx-auto ${i % 2 === 0 ? "ml-[8vw]" : "mr-[8vw]"}`}
+            style={{ width: `calc(${WRAP_W})`, height: WRAP_H, margin: 0, overflow: "hidden" }}
+          >
+            <img
+              data-nudge
+              src={src}
+              alt={`img-${i}`}
+              className="block w-full h-full object-cover rounded-[10px] shadow-[0_14px_40px_rgba(0,0,0,0.18)]"
+              style={{ transform: `scaleX(${baseImgScaleX(i)})` }}
+              draggable={false}
+            />
+          </figure>
+        ))}
+      </section>
+
+      {/* ===== LAST 3 + RIGHT CONTENT ===== */}
+      <section
+        ref={finalRef}
+        className="relative mx-auto max-w-[1400px] px-4 pt-0 pb-[18vh] min-h-[90vh] leading-none -mt-[1px]"
+      >
+        <div className="grid grid-rows-3 gap-0 w-[60%]">
+          {IMAGES.slice(-3).map((src, i) => {
+            const scatter = i === 0 ? "translateX(-4vw)" : i === 1 ? "translateX(3vw)" : "translateX(6vw)";
+            return (
+              <div key={i} style={{ width: LAST_SIZE, height: LAST_SIZE, transform: scatter, overflow: "hidden" }}>
+                <img
+                  data-nudge-final
+                  src={src}
+                  alt={`final-${i}`}
+                  className="block w-full h-full object-cover rounded-[10px] shadow-[0_12px_32px_rgba(0,0,0,0.16)]"
                 />
-            </div>
+              </div>
+            );
+          })}
         </div>
-    );
-}
 
-
-const EntrypointVertical: React.FC = () => {
-    return (
-        <section className="bg-cream text-brand-brown py-24 md:py-48">
-            <div className="container mx-auto px-4 md:px-8">
-                <div className="text-center mb-20 md:mb-32 max-w-3xl mx-auto">
-                    <img 
-                        src="https://www.savor.it/_nuxt/img/realfats.92a2113.svg" 
-                        alt="Real fats, real flavor."
-                        className="w-full h-auto mx-auto max-w-lg mb-8"
-                    />
-                    <p className="text-lg sm:text-xl text-brand-brown-light leading-relaxed">
-                        All our old favorites, just made a different way.
-                    </p>
-                    <a href="#" className="mt-10 group relative inline-flex items-center justify-center overflow-hidden rounded-full bg-transparent border border-brand-brown-light/50 px-8 py-3 text-sm font-medium text-brand-brown transition-all duration-500 hover:bg-brand-brown/5">
-                        <span className="link-underline">Our Foods</span>
-                    </a>
-                </div>
-                <div className="grid grid-cols-12 gap-y-16 md:gap-y-28 gap-x-8">
-                    {images.map((img) => (
-                       <ParallaxImage key={img.src} src={img.src} alt={img.alt} className={img.className} parallaxFactor={img.parallaxFactor}/>
-                    ))}
-                </div>
+        <aside
+          ref={contentRef}
+          className="absolute right-[4vw] top-1/2 -translate-y-1/2 w-[32%] max-w-[520px] select-none"
+        >
+          <h2 className="font-serif text-[#3b1510] text-[6rem] leading-[1.06]">
+            <div ref={l1Ref} className="flex flex-wrap gap-x-[0.5rem]">
+              {line1Words.map((w, i) => <span key={`l1-${i}`} data-word>{w}</span>)}
             </div>
-        </section>
-    );
-};
+            <div ref={l2Ref} className="flex flex-wrap gap-x-[0.5rem]">
+              {line2Words.map((w, i) => <span key={`l2-${i}`} data-word>{w}</span>)}
+            </div>
+          </h2>
 
-export default EntrypointVertical;
+          <div ref={pRef} className="mt-6 text-[#6a4a3a] text-lg flex flex-wrap gap-x-[0.5rem]">
+            {paraWords.map((w, i) => <span key={`p-${i}`} data-word>{w}</span>)}
+          </div>
+
+          <button
+            ref={ctaRef}
+            className="mt-8 inline-flex items-center gap-2 border border-[#3b1510] px-6 py-3 rounded-md text-[#3b1510] hover:bg-[#3b1510] hover:text-[#fbf2e2] transition"
+          >
+            Our — Foods
+          </button>
+        </aside>
+      </section>
+
+      {/* ===== CURTAIN SECTION (image behind; section bg = page color) ===== */}
+      <section
+        ref={curtainRef}
+        className="relative h-screen w-full overflow-hidden bg-[#fbf2e2]"
+      >
+        {/* image BEHIND — slides down from top (no overlay used) */}
+        <img
+          ref={curtainImgRef}
+          src="/1.jpg"
+          alt="hero"
+          className="absolute inset-0 w-full h-full object-cover z-0"
+        />
+
+        {/* text ABOVE image; always visible; add subtle shadow for readability */}
+        <div
+          ref={curtainTxtRef}
+          className="relative z-10 h-full flex items-end md:items-center pl-[6vw] pb-[7vh] md:pb-0"
+        >
+          <div className="font-serif text-[#f4f0ea] drop-shadow-[0_2px_10px_rgba(0,0,0,0.45)] leading-[0.95]">
+            <div className="text-[12vw] md:text-[8rem]">
+              {"The future".split(" ").map((w, i) => (
+                <span key={`tf-${i}`} data-word className="inline-block mr-3">{w}</span>
+              ))}
+            </div>
+            <div className="text-[12vw] md:text-[8rem]">
+              {"tastes delicious".split(" ").map((w, i) => (
+                <span key={`td-${i}`} data-word className="inline-block mr-3">{w}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
