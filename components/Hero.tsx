@@ -27,8 +27,6 @@ const Hero: React.FC = () => {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/30 to-black/60"></div>
 
-        {/* curtain: uses global .curtain styles so it matches Features animation */}
-        <div className="curtain ulta" aria-hidden />
       </div>
 
       {/* Foreground Content */}

@@ -1,31 +1,59 @@
 "use client";
 
-import React, { useLayoutEffect, useRef } from "react";
+import React, { useLayoutEffect, useMemo, useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
 
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
+
+const lerp = (start: number, end: number, t: number) =>
+  start + (end - start) * t;
+
+const buildClipPath = (rawProgress: number) => {
+  const p = clamp(rawProgress, 0, 1);
+  const base = clamp(0.92 - p * 1.05, -0.25, 0.92);
+
+  const curvePhase = p < 0.45 ? clamp(p / 0.45, 0, 1) : clamp((p - 0.45) / 0.55, 0, 1);
+ const amplitude =
+   p < 0.45 ? lerp(-0.5, -0.1, curvePhase) : lerp(-0.1, 0.45, curvePhase);
+
+  const cpY = clamp(base + amplitude, -0.35, 1.35);
+  const cpY2 = clamp(base + amplitude * 0.92, -0.35, 1.35);
+
+  const toFixed = (n: number) => Number.parseFloat(n.toFixed(4));
+
+  return [
+    "M0",
+    toFixed(base),
+    "C0.25",
+    toFixed(cpY),
+    "0.75",
+    toFixed(cpY2),
+    "1",
+    toFixed(base),
+    "L1 1 L0 1 Z",
+  ].join(" ");
+};
+
 // Scenes: butter → palm/process → lab → brown → green
 const SCENES = [
-  "https://cdn.sanity.io/images/jqzja4ip/production/70220126d3e8ae121147f08fd052458931deaaa6-2880x1620.png?w=2000&fm=webp&q=80",
-  "https://cdn.sanity.io/images/jqzja4ip/production/ea59fbc6723a6ef8ed349a1aadae9117932e99e6-2880x1620.png?w=2000&fm=webp&q=80",
-  "https://cdn.sanity.io/images/jqzja4ip/production/6b33388bdee3545b7ef4c28d6b95020c440778a6-2880x1620.png?w=2000&fm=webp&q=80",
-  "https://cdn.sanity.io/images/jqzja4ip/production/ef32f0b92471e9878d3e6a214ff100175d873c06-2880x1620.png?w=2000&fm=webp&q=80",
-  "https://cdn.sanity.io/images/jqzja4ip/production/a3edb67c6d72ec6afd5c610b58d92aa9d4dca0ba-1440x810.png?w=2000&fm=webp&q=80",
+  { id: "butter", src: "https://cdn.sanity.io/images/jqzja4ip/production/70220126d3e8ae121147f08fd052458931deaaa6-2880x1620.png?w=2000&fm=webp&q=80" },
+  { id: "palm", src: "https://cdn.sanity.io/images/jqzja4ip/production/ea59fbc6723a6ef8ed349a1aadae9117932e99e6-2880x1620.png?w=2000&fm=webp&q=80" },
+  { id: "lab", src: "https://cdn.sanity.io/images/jqzja4ip/production/6b33388bdee3545b7ef4c28d6b95020c440778a6-2880x1620.png?w=2000&fm=webp&q=80" },
+  { id: "brown", src: "https://cdn.sanity.io/images/jqzja4ip/production/ef32f0b92471e9878d3e6a214ff100175d873c06-2880x1620.png?w=2000&fm=webp&q=80" },
+  { id: "green", src: "https://cdn.sanity.io/images/jqzja4ip/production/a3edb67c6d72ec6afd5c610b58d92aa9d4dca0ba-1440x810.png?w=2000&fm=webp&q=80" }
 ];
 
 export default function StoryCanvas() {
   const root = useRef<HTMLDivElement | null>(null);
   const pin = useRef<HTMLDivElement | null>(null);
-
-  // NEW: curtain ref
-  const curtainRef = useRef<HTMLDivElement | null>(null);
+  const clipPathRef = useRef<SVGPathElement | null>(null);
+  const initialClipPath = useMemo(() => buildClipPath(0), []);
 
   // initial curved reveal
-  const clipRect = useRef<SVGRectElement | null>(null);
-  const clipEllipse = useRef<SVGEllipseElement | null>(null);
-
   const underlayRef = useRef<HTMLDivElement | null>(null);
 
   // scenes
@@ -42,6 +70,7 @@ export default function StoryCanvas() {
   const craftRef = useRef<HTMLDivElement | null>(null);
   const lineRef = useRef<SVGPathElement | null>(null);
   const arcRef = useRef<SVGPathElement | null>(null);
+  const arcSvgRef = useRef<SVGSVGElement | null>(null);
 
   // Group 2
   const g2 = useRef<HTMLDivElement | null>(null);
@@ -68,7 +97,20 @@ export default function StoryCanvas() {
   const OUTRO_IMAGES = ["/1.jpg", "/2.jpg", "/3.jpg", "/4.jpg", "/5.jpg"];
 
   useLayoutEffect(() => {
+    let removeListener: (() => void) | null = null;
     const ctx = gsap.context(() => {
+      const timings = {
+        arcReveal: 0.24,
+        arcExpand: 0.46,
+        arcExit: 0.72,
+        g1Copy: 0.9,
+        g1Exit: 1.28,
+        g2Start: 1.42,
+        g2Exit: 1.9,
+        g3Start: 2.08,
+        outroStart: 2.34,
+        outroFrame: 2.4,
+      };
       // make sure dashed path is hidden until finale
       if (dashedRef.current) {
         const L = dashedRef.current.getTotalLength();
@@ -91,19 +133,73 @@ export default function StoryCanvas() {
         defaults: { ease: "none" },
       });
 
-      // quick initial clip reveal
-      tl.fromTo(
-        clipRect.current,
-        { attr: { y: 0.96, height: 0.04 } },
-        { attr: { y: -0.45, height: 1.45 }, duration: 0.1 },
+      const clipState = { value: 0 };
+      const applyClip = () => {
+        if (clipPathRef.current) {
+          clipPathRef.current.setAttribute("d", buildClipPath(clipState.value));
+        }
+      };
+      applyClip();
+
+      if (arcSvgRef.current) {
+        gsap.set(arcSvgRef.current, {
+          transformOrigin: "50% 100%",
+          scaleX: 1,
+          scaleY: 1.45,
+          autoAlpha: 0,
+          yPercent: 0,
+        });
+
+        tl.to(
+          arcSvgRef.current,
+          { autoAlpha: 1, duration: 0.04, ease: "power1.out" },
+          timings.arcReveal
+        );
+        tl.to(
+          arcSvgRef.current,
+          { scaleX: 1.18, duration: 0.22, ease: "power2.inOut" },
+          timings.arcReveal
+        );
+        tl.to(
+          arcSvgRef.current,
+          { scaleX: 1, scaleY: 1.15, duration: 0.18, ease: "power2.out" },
+          timings.arcExpand
+        );
+        tl.to(
+          arcSvgRef.current,
+          {
+            scaleX: 0.32,
+            scaleY: 0.72,
+            yPercent: -210,
+            autoAlpha: 0,
+            duration: 0.22,
+            ease: "power3.in",
+          },
+          timings.arcExit
+        );
+      }
+
+      tl.to(
+        clipState,
+        {
+          value: 0.55,
+          duration: 0.16,
+          ease: "power2.inOut",
+          onUpdate: applyClip,
+        },
         0
       );
-      tl.fromTo(
-        clipEllipse.current,
-        { attr: { cy: 0.96, rx: 0.62, ry: 0.22 } },
-        { attr: { cy: -0.45, rx: 0.56, ry: 0.2 }, duration: 0.1 },
-        0
+      tl.to(
+        clipState,
+        {
+          value: 1,
+          duration: 0.36,
+          ease: "power2.out",
+          onUpdate: applyClip,
+        },
+        0.16
       );
+
       tl.fromTo(
         underlayRef.current,
         { backgroundColor: "#fcf7ea" },
@@ -112,35 +208,46 @@ export default function StoryCanvas() {
       );
 
       // crossfades
-      const seg = [
-        { i: 0, in: 0.0, peak: 0.06, out: 0.22 },
-        { i: 1, in: 0.18, peak: 0.26, out: 0.38 },
-        { i: 2, in: 0.34, peak: 0.48, out: 0.6 },
-        { i: 3, in: 0.56, peak: 0.66, out: 0.78 },
-        { i: 4, in: 0.74, peak: 0.86, out: 1.0 },
+      const sceneSegments = [
+        { index: 0, start: 0, end: timings.g1Copy - 0.04 },
+        { index: 1, start: timings.g1Copy, end: timings.g2Start - 0.06 },
+        { index: 2, start: timings.g2Start, end: timings.g3Start - 0.06 },
+        { index: 3, start: timings.g3Start, end: timings.outroStart - 0.06 },
+        { index: 4, start: timings.outroStart, end: timings.outroFrame + 0.3 },
       ];
-      seg.forEach(({ i, in: a, peak, out }) => {
-        const el = layers.current[i];
-        if (!el) return;
-        tl.fromTo(
-          el,
-          { opacity: i === 0 ? 1 : 0 },
-          { opacity: 1, duration: peak - a, ease: "power1.inOut" },
-          a
-        );
-        tl.to(
-          el,
-          { opacity: i === seg.length - 1 ? 1 : 0, duration: out - peak, ease: "power1.inOut" },
-          peak
-        );
+
+      gsap.set(layers.current, { opacity: 0 });
+      const lastSegment = sceneSegments[sceneSegments.length - 1];
+
+      sceneSegments.forEach(({ index, start, end }) => {
+        const layer = layers.current[index];
+        if (!layer) return;
+
+        if (index === 0) {
+          gsap.set(layer, { opacity: 1 });
+        } else {
+          tl.to(
+            layer,
+            { opacity: 1, duration: 0.18, ease: "power1.inOut" },
+            start
+          );
+        }
+
+        if (index !== lastSegment.index) {
+          tl.to(
+            layer,
+            { opacity: 0, duration: 0.18, ease: "power1.inOut" },
+            end
+          );
+        }
       });
 
-      const riseIn = (el: Element | null, at: number, dur = 0.1, y = 36) => {
+      const riseIn = (el: Element | null, at: number, dur = 0.1, y = 36, extra?: gsap.TweenVars) => {
         if (!el) return;
         tl.fromTo(
           el,
           { y, autoAlpha: 0 },
-          { y: 0, autoAlpha: 1, duration: dur, ease: "power3.out" },
+          { y: 0, autoAlpha: 1, duration: dur, ease: "power3.out", ...extra },
           at
         );
       };
@@ -148,74 +255,84 @@ export default function StoryCanvas() {
         path: SVGPathElement | null,
         at: number,
         dur = 0.12,
-        dashed = false
+        dashed = false,
+        extra?: { from?: gsap.TweenVars; to?: gsap.TweenVars }
       ) => {
         if (!path) return;
         const L = path.getTotalLength();
         gsap.set(path, {
           strokeDasharray: dashed ? "10 10" : L,
           strokeDashoffset: L,
+          autoAlpha: 0,
+          ...(extra?.from ?? {}),
         });
-        tl.to(path, { strokeDashoffset: 0, duration: dur, ease: "none" }, at);
+        tl.to(
+          path,
+          { autoAlpha: 1, duration: 0.04, ease: "power1.out" },
+          at
+        );
+        tl.to(
+          path,
+          { strokeDashoffset: 0, duration: dur, ease: "none", ...(extra?.to ?? {}) },
+          at + 0.02
+        );
       };
 
       // Group 1 sequence
-      riseIn(fromRef.current, 0.08, 0.1);
-      strokeDraw(lineRef.current, 0.1, 0.08); // switch from butter → palm at end
-      riseIn(palmRef.current, 0.2, 0.12);
-      strokeDraw(arcRef.current, 0.28, 0.14); // then palm → lab
-      riseIn(craftRef.current, 0.34, 0.14);
+                  const textStart = timings.g1Copy;
 
-      // move Group 1 away as brown enters
-      tl.to(g1.current, { yPercent: -38, duration: 0.12, ease: "power2.inOut" }, 0.56);
-      tl.to(g1.current, { autoAlpha: 0, duration: 0.06 }, 0.64);
+      riseIn(fromRef.current, textStart, 0.12);
+      strokeDraw(lineRef.current, textStart + 0.06, 0.1); // switch from butter -> palm at end
+      riseIn(palmRef.current, textStart + 0.16, 0.12);
+      strokeDraw(arcRef.current, textStart + 0.14, 0.16);
+      riseIn(craftRef.current, textStart + 0.28, 0.16);
+
+      tl.to(g1.current, { yPercent: -38, duration: 0.14, ease: "power2.inOut" }, timings.g1Exit);
+      tl.to(g1.current, { autoAlpha: 0, duration: 0.08 }, timings.g1Exit + 0.08);
 
       // Group 2
-      riseIn(g2.current, 0.56, 0.08, 24);
+      riseIn(g2.current, timings.g2Start, 0.1, 24);
       tl.fromTo(
         wLinesRef.current?.children ?? [],
         { y: 20, autoAlpha: 0 },
         {
           y: 0,
           autoAlpha: 1,
-          duration: 0.08,
+          duration: 0.1,
           ease: "power3.out",
           stagger: 0.06,
         },
-        0.58
+        timings.g2Start + 0.06
       );
-      tl.to(g2.current, { yPercent: -34, duration: 0.1, ease: "power2.inOut" }, 0.74);
-      tl.to(g2.current, { autoAlpha: 0, duration: 0.06 }, 0.8);
+      tl.to(g2.current, { yPercent: -34, duration: 0.12, ease: "power2.inOut" }, timings.g2Exit - 0.14);
+      tl.to(g2.current, { autoAlpha: 0, duration: 0.08 }, timings.g2Exit);
 
       // -------- Group 3 (finale) --------
-      // Make sure intro line is definitely visible
-      riseIn(futureRef.current, 0.72, 0.12, 22);
+      riseIn(futureRef.current, timings.g3Start, 0.14, 22);
 
-      // show/draw dotted path from the future line down to the stack
       if (dashedRef.current) {
         const L = dashedRef.current.getTotalLength();
-        tl.set(dashedRef.current, { autoAlpha: 1 }, 0.74);
+        tl.set(dashedRef.current, { autoAlpha: 1 }, timings.g3Start + 0.04);
         tl.fromTo(
           dashedRef.current,
           { strokeDashoffset: L },
           { strokeDashoffset: 0, duration: 0.22, ease: "none" },
-          0.74
+          timings.g3Start + 0.04
         );
       }
 
-      // stack of mores + last row “& more”
-      riseIn(moreStackRef.current, 0.76, 0.12, 26);
-      riseIn(ampCellRef.current, 0.80, 0.10, 16);
-      riseIn(moreLastRef.current, 0.80, 0.10, 16);
+      riseIn(moreStackRef.current, timings.g3Start + 0.08, 0.12, 26);
+      riseIn(ampCellRef.current, timings.g3Start + 0.14, 0.1, 16);
+      riseIn(moreLastRef.current, timings.g3Start + 0.14, 0.1, 16);
 
       // right-hand tail
-      riseIn(tailRef.current, 0.86, 0.12, 20);
+      riseIn(tailRef.current, timings.g3Start + 0.22, 0.12, 20);
 
-      // -------- OUTRO: shrink to centered frame + quick scene carousel --------
+      // -------- OUTRO"@: shrink to centered frame + quick scene carousel --------
       const g3Els = [futureRef.current, moreStackRef.current, ampCellRef.current, moreLastRef.current, tailRef.current, dashedRef.current].filter(Boolean);
-      tl.to(g3Els, { autoAlpha: 0, duration: 0.10, ease: "power1.out" }, 0.90);
-      tl.to(underlayRef.current, { backgroundColor: "#fcf7ea", duration: 0.14, ease: "power1.inOut" }, 0.90);
-      tl.set(outroRef.current, { autoAlpha: 1 }, 0.94);
+      tl.to(g3Els, { autoAlpha: 0, duration: 0.10, ease: "power1.out" }, timings.outroStart);
+      tl.to(underlayRef.current, { backgroundColor: "#fcf7ea", duration: 0.14, ease: "power1.inOut" }, timings.outroStart);
+      tl.set(outroRef.current, { autoAlpha: 1 }, timings.outroFrame);
       // shrink the ACTUAL final background scene, not a new overlay
       const lastLayer = () => layers.current[layers.current.length - 1];
       gsap.set(lastLayer(), { willChange: "transform" });
@@ -226,19 +343,19 @@ export default function StoryCanvas() {
         boxShadow: "0 12px 32px rgba(0,0,0,.25)",
         duration: 0.22,
         ease: "power2.inOut",
-      }, 0.94);
+      }, timings.outroFrame);
 
       // elegant left-to-right headline reveal using clipPath
       if (headlineRef.current) {
         gsap.set(headlineRef.current, { clipPath: "inset(0 100% 0 0)", autoAlpha: 1 });
       }
       // bring in headline and side copy after the frame settles
-      tl.to(headlineRef.current, { clipPath: "inset(0 0% 0 0)", duration: 0.18, ease: "power2.out" }, 1.02);
-      tl.fromTo(sideCopyRef.current, { autoAlpha: 0, y: 16 }, { autoAlpha: 1, y: 0, duration: 0.12, ease: "power2.out" }, 1.06);
+      tl.to(headlineRef.current, { clipPath: "inset(0 0% 0 0)", duration: 0.18, ease: "power2.out" }, timings.outroFrame + 0.04);
+      tl.fromTo(sideCopyRef.current, { autoAlpha: 0, y: 16 }, { autoAlpha: 1, y: 0, duration: 0.12, ease: "power2.out" }, timings.outroFrame + 0.08);
 
       // swap images on the ACTUAL last layer 5 times
       OUTRO_IMAGES.forEach((src, i) => {
-        const at = 1.02 + i * 0.05; // quick cadence
+        const at = 1.44 + i * 0.05; // quick cadence
         tl.call(() => {
           const el = lastLayer();
           if (el) el.style.backgroundImage = `url(${src})`;
@@ -247,85 +364,46 @@ export default function StoryCanvas() {
         tl.to(lastLayer(), { scale: "+=0.015", duration: 0.02, yoyo: true, repeat: 1, ease: "power1.inOut" }, at);
       });
 
-      // NEW: separate ScrollTrigger to drive the curtain flip + shrink/fade
-      // math: progress 0 -> 1 maps scaleY -1 -> 1 (ulta -> seedha)
-      // when progress > 0.9 start shrinking and fading
-      //      if (curtainRef.current) {
-      //        curtainRef.current.style.setProperty("--scaleY", "-1");
-      //        curtainRef.current.style.setProperty("--scale", "1");
-      //        curtainRef.current.style.setProperty("--opacity", "1");
-      //        curtainRef.current.classList.add("ulta");
-      //        curtainRef.current.classList.remove("seedha");
-      //      }
-      // initialize all curtains (so Hero + Features share the same state)
-      document.querySelectorAll<HTMLElement>(".curtain").forEach((el) => {
-        el.style.setProperty("--scaleY", "-1");
-        el.style.setProperty("--scale", "1");
-        el.style.setProperty("--opacity", "1");
-        el.classList.add("ulta");
-        el.classList.remove("seedha");
-      });
-
-      ScrollTrigger.create({
-        trigger: root.current,
-        start: "top top",
-        end: "+=60%",   // adjust how long the morph should run
-        scrub: true,
-        onUpdate: (self) => {
-          const p = self.progress; // 0..1
-          // map -1..1
-          const scaleY = -1 + p * 2;
-          // shrink + fade between 0.9..1.0
-          let scale = 1;
-          let opacity = 1;
-          if (p >= 0.9) {
-            const t = Math.min(1, (p - 0.9) / 0.1); // 0..1
-            scale = 1 - t * (1 - 0.36);             // 1 -> 0.36
-            opacity = 1 - t;
-          }
-
-          // apply to all curtains so Hero and Features remain visually identical
-          document.querySelectorAll<HTMLElement>(".curtain").forEach((el) => {
-            el.style.setProperty("--scaleY", String(scaleY));
-            el.style.setProperty("--scale", String(scale));
-            el.style.setProperty("--opacity", String(opacity));
-            if (p < 0.5) {
-              el.classList.add("ulta");
-              el.classList.remove("seedha");
-            } else {
-              el.classList.add("seedha");
-              el.classList.remove("ulta");
-            }
-          });
-        },
-      });
+      ScrollTrigger.addEventListener("refresh", applyClip);
+      removeListener = () => ScrollTrigger.removeEventListener("refresh", applyClip);
 
       requestAnimationFrame(() => ScrollTrigger.refresh());
     }, root);
 
-    return () => ctx.revert();
+    return () => {
+      removeListener?.();
+      ctx.revert();
+    };
   }, []);
 
   return (
     <div ref={root} className="story-root">
-      {/* clipPath defs */}
-      <svg width="0" height="0" className="defs">
+      <svg width="0" height="0" className="defs" aria-hidden>
         <defs>
           <clipPath id="storyReveal" clipPathUnits="objectBoundingBox">
-            <rect ref={clipRect} x="0" y="0.96" width="1" height="0.04" />
-            <ellipse ref={clipEllipse} cx="0.5" cy="0.96" rx="0.62" ry="0.22" />
+            <path ref={clipPathRef} d={initialClipPath} />
           </clipPath>
         </defs>
       </svg>
 
-      <div ref={pin} className="stage" style={{ clipPath: "url(#storyReveal)" }}>
+      <div
+        ref={pin}
+        className="stage"
+        style={{
+          clipPath: "url(#storyReveal)",
+          WebkitClipPath: "url(#storyReveal)",
+        }}
+      >
         <div ref={underlayRef} className="underlay" />
 
-        {/* NEW: curtain element - sits above the underlay and below copy */}
-        <div ref={curtainRef} className="curtain ulta" />
-
-        {SCENES.map((src, i) => (
-          <div key={i} ref={setLayer} className="scene" style={{ backgroundImage: `url(${src})` }} />
+        {SCENES.map((scene) => (
+          <div
+            key={scene.id}
+            ref={setLayer}
+            className="scene"
+            style={{ backgroundImage: `url(${scene.src})` }}
+            data-scene={scene.id}
+          />
         ))}
 
         {/* ---------- GROUP 1 ---------- */}
@@ -346,10 +424,10 @@ export default function StoryCanvas() {
 
           <div className="palm" ref={palmRef}>to palm oil</div>
 
-          <svg className="arc" viewBox="0 0 240 240" preserveAspectRatio="none" aria-hidden>
+          <svg ref={arcSvgRef} className="arc" viewBox="0 0 240 240" preserveAspectRatio="none" aria-hidden>
             <path
               ref={arcRef}
-              d="M10 20 C 40 170, 240 260, 330 210"
+              d="M0 60 Q 120 320 240 60"
               fill="none"
               stroke="currentColor"
               strokeWidth="1.5"
@@ -415,8 +493,13 @@ export default function StoryCanvas() {
         {/* ---------- OUTRO (centered shrinking frame with quick image carousel) ---------- */}
         <div className="outro" ref={outroRef}>
           <div className="outro-frame" ref={frameRef}>
-            {SCENES.map((src, i) => (
-              <div key={`o-${i}`} ref={setOutroLayer} className="outro-scene" style={{ backgroundImage: `url(${src})` }} />
+            {SCENES.map((scene, i) => (
+              <div
+                key={`outro-${scene.id}-${i}`}
+                ref={setOutroLayer}
+                className="outro-scene"
+                style={{ backgroundImage: `url(${scene.src})` }}
+              />
             ))}
           </div>
           <h2 className="outro-headline" ref={headlineRef}>
@@ -431,8 +514,8 @@ export default function StoryCanvas() {
       </div>
 
       <div className="preload" aria-hidden>
-        {SCENES.map((s) => (
-          <img key={s} src={s} loading="lazy" alt="" />
+        {SCENES.map((scene) => (
+          <img key={`preload-${scene.id}`} src={scene.src} loading="lazy" alt="" />
         ))}
       </div>
 
@@ -466,10 +549,12 @@ export default function StoryCanvas() {
 
         .arc {
           position: absolute;
-          top: 22%;
-          left: calc(8% + 8vw + 140px + 8vw);
-          width: 28vw;
-          height: 22vw;
+          top: 18%;
+          left: 50%;
+          width: calc(100% - 20vw);
+          max-width: 100vw;
+          height: 34vw;
+          transform: translateX(-50%);
           overflow: visible;
         }
 
@@ -579,27 +664,11 @@ export default function StoryCanvas() {
         .preload { position: absolute; width: 0; height: 0; overflow: hidden; }
         .preload img { width: 1px; height: 1px; opacity: 0; }
 
-        /* NEW: curtain styles */
-        .curtain {
-          position: absolute;
-          inset: 0;
-          background: radial-gradient(circle at 50% 0%, #fcf7ea, #0b0b0b);
-          transform-origin: top;
-          pointer-events: none;
-          will-change: transform, opacity;
-        }
-        .ulta {
-          transform: scaleY(-1);
-        }
-        .seedha {
-          transform: scaleY(1);
-        }
-
         @media (max-width: 640px) {
           .from { font-size: 7.2vw; }
           .from-line { width: 22vw; }
           .palm { left: calc(8% + 22vw + 120px); font-size: 7.2vw; }
-          .arc { left: calc(8% + 22vw + 120px + 6vw); width: 26vw; height: 26vw; top: 33%; }
+          .arc { left: 50%; width: calc(100vw - 24vw); height: 42vw; top: 38%; transform: translateX(-50%); }
           .craft { left: calc(8% + 22vw + 120px + 6vw + 26vw + 24px); max-width: 56vw; font-size: 5.4vw; }
 
           .without { font-size: 4.6vw; }
@@ -622,3 +691,20 @@ export default function StoryCanvas() {
     </div>
   );
 }
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
