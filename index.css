@@ -1,0 +1,57 @@
+
+:root{
+  --curtain-height: 36vh;
+  --curtain-radius: 240px;      
+  --curtain-thickness: 80px;   
+  --mask-y: 0%;                
+  --rot: 0deg;                
+  --scale: 1;
+  --opacity: 1;
+  --curtain-bg: #ffffff;
+}
+
+.curtain {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: var(--curtain-height);
+  pointer-events: none;
+  z-index: 3;
+  transform-origin: 50% 0%;                    
+  transform: rotate(var(--rot)) scale(var(--scale));
+  opacity: var(--opacity);
+  will-change: transform, opacity;
+  background: var(--curtain-bg);
+  box-shadow: 0 12px 28px rgba(0,0,0,.08);
+
+
+  --r: var(--curtain-radius);
+  --t: var(--curtain-thickness);
+
+  -webkit-mask:
+    radial-gradient(closest-side at 50% var(--mask-y),
+      transparent 0 calc(var(--r) - var(--t)),
+      #000 calc(var(--r) - var(--t)) calc(var(--r) + 0px),
+      transparent calc(var(--r) + 0px)
+    ) top/100% calc(var(--r) * 1.6) no-repeat,
+    linear-gradient(#000 0 0);
+  mask:
+    radial-gradient(closest-side at 50% var(--mask-y),
+      transparent 0 calc(var(--r) - var(--t)),
+      #000 calc(var(--r) - var(--t)) calc(var(--r) + 0px),
+      transparent calc(var(--r) + 0px)
+    ) top/100% calc(var(--r) * 1.6) no-repeat,
+    linear-gradient(#000 0 0);
+}
+
+.curtain.ulta  { --rot: 0deg; }
+.curtain.seedha { --rot: 180deg; }
+
+@media (max-width:640px){
+  :root{
+    --curtain-height:46vh;
+    --curtain-radius:320px;
+    --curtain-thickness:100px;
+  }
+}

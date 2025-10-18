@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from "react";
-import heroVideo from "../assets/hero.mp4";
+import heroVideo from "../assets/hero.mov";
 
 const Hero: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -26,6 +26,9 @@ const Hero: React.FC = () => {
           playsInline
         />
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/30 to-black/60"></div>
+
+        {/* curtain: uses global .curtain styles so it matches Features animation */}
+        <div className="curtain ulta" aria-hidden />
       </div>
 
       {/* Foreground Content */}

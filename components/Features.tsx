@@ -19,6 +19,9 @@ export default function StoryCanvas() {
   const root = useRef<HTMLDivElement | null>(null);
   const pin = useRef<HTMLDivElement | null>(null);
 
+  // NEW: curtain ref
+  const curtainRef = useRef<HTMLDivElement | null>(null);
+
   // initial curved reveal
   const clipRect = useRef<SVGRectElement | null>(null);
   const clipEllipse = useRef<SVGEllipseElement | null>(null);
@@ -244,6 +247,59 @@ export default function StoryCanvas() {
         tl.to(lastLayer(), { scale: "+=0.015", duration: 0.02, yoyo: true, repeat: 1, ease: "power1.inOut" }, at);
       });
 
+      // NEW: separate ScrollTrigger to drive the curtain flip + shrink/fade
+      // math: progress 0 -> 1 maps scaleY -1 -> 1 (ulta -> seedha)
+      // when progress > 0.9 start shrinking and fading
+      //      if (curtainRef.current) {
+      //        curtainRef.current.style.setProperty("--scaleY", "-1");
+      //        curtainRef.current.style.setProperty("--scale", "1");
+      //        curtainRef.current.style.setProperty("--opacity", "1");
+      //        curtainRef.current.classList.add("ulta");
+      //        curtainRef.current.classList.remove("seedha");
+      //      }
+      // initialize all curtains (so Hero + Features share the same state)
+      document.querySelectorAll<HTMLElement>(".curtain").forEach((el) => {
+        el.style.setProperty("--scaleY", "-1");
+        el.style.setProperty("--scale", "1");
+        el.style.setProperty("--opacity", "1");
+        el.classList.add("ulta");
+        el.classList.remove("seedha");
+      });
+
+      ScrollTrigger.create({
+        trigger: root.current,
+        start: "top top",
+        end: "+=60%",   // adjust how long the morph should run
+        scrub: true,
+        onUpdate: (self) => {
+          const p = self.progress; // 0..1
+          // map -1..1
+          const scaleY = -1 + p * 2;
+          // shrink + fade between 0.9..1.0
+          let scale = 1;
+          let opacity = 1;
+          if (p >= 0.9) {
+            const t = Math.min(1, (p - 0.9) / 0.1); // 0..1
+            scale = 1 - t * (1 - 0.36);             // 1 -> 0.36
+            opacity = 1 - t;
+          }
+
+          // apply to all curtains so Hero and Features remain visually identical
+          document.querySelectorAll<HTMLElement>(".curtain").forEach((el) => {
+            el.style.setProperty("--scaleY", String(scaleY));
+            el.style.setProperty("--scale", String(scale));
+            el.style.setProperty("--opacity", String(opacity));
+            if (p < 0.5) {
+              el.classList.add("ulta");
+              el.classList.remove("seedha");
+            } else {
+              el.classList.add("seedha");
+              el.classList.remove("ulta");
+            }
+          });
+        },
+      });
+
       requestAnimationFrame(() => ScrollTrigger.refresh());
     }, root);
 
@@ -264,6 +320,9 @@ export default function StoryCanvas() {
 
       <div ref={pin} className="stage" style={{ clipPath: "url(#storyReveal)" }}>
         <div ref={underlayRef} className="underlay" />
+
+        {/* NEW: curtain element - sits above the underlay and below copy */}
+        <div ref={curtainRef} className="curtain ulta" />
 
         {SCENES.map((src, i) => (
           <div key={i} ref={setLayer} className="scene" style={{ backgroundImage: `url(${src})` }} />
@@ -519,6 +578,22 @@ export default function StoryCanvas() {
         /* preload imgs */
         .preload { position: absolute; width: 0; height: 0; overflow: hidden; }
         .preload img { width: 1px; height: 1px; opacity: 0; }
+
+        /* NEW: curtain styles */
+        .curtain {
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(circle at 50% 0%, #fcf7ea, #0b0b0b);
+          transform-origin: top;
+          pointer-events: none;
+          will-change: transform, opacity;
+        }
+        .ulta {
+          transform: scaleY(-1);
+        }
+        .seedha {
+          transform: scaleY(1);
+        }
 
         @media (max-width: 640px) {
           .from { font-size: 7.2vw; }
