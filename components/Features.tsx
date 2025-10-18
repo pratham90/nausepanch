@@ -12,6 +12,9 @@ const clamp = (value: number, min: number, max: number) =>
 const lerp = (start: number, end: number, t: number) =>
   start + (end - start) * t;
 
+const CLIP_URL = "url(#storyReveal)";
+const RECT_PATH = "M0 0 L1 0 L1 1 L0 1 Z";
+
 const buildClipPath = (rawProgress: number) => {
   const p = clamp(rawProgress, 0, 1);
   const base = clamp(0.92 - p * 1.05, -0.25, 0.92);
@@ -134,10 +137,45 @@ export default function StoryCanvas() {
       });
 
       const clipState = { value: 0 };
-      const applyClip = () => {
-        if (clipPathRef.current) {
-          clipPathRef.current.setAttribute("d", buildClipPath(clipState.value));
+      let clipReleased = false;
+
+      const releaseClip = () => {
+        const stageEl = pin.current;
+        if (stageEl) {
+          stageEl.style.clipPath = "none";
+          // @ts-ignore - Safari webkit prefix
+          stageEl.style.webkitClipPath = "none";
         }
+        if (clipPathRef.current) {
+          clipPathRef.current.setAttribute("d", RECT_PATH);
+        }
+        clipReleased = true;
+      };
+
+      const reapplyClip = () => {
+        const stageEl = pin.current;
+        if (stageEl) {
+          stageEl.style.clipPath = CLIP_URL;
+          // @ts-ignore - Safari webkit prefix
+          stageEl.style.webkitClipPath = CLIP_URL;
+        }
+        clipReleased = false;
+      };
+      const applyClip = () => {
+        if (!clipPathRef.current) {
+          return;
+        }
+        if (clipState.value >= 1.01) {
+          releaseClip();
+          return;
+        }
+        if (clipReleased) {
+          reapplyClip();
+        }
+        clipPathRef.current.setAttribute(
+          "d",
+          buildClipPath(clipState.value)
+        );
       };
       applyClip();
 
@@ -199,6 +237,7 @@ export default function StoryCanvas() {
         },
         0.16
       );
+      tl.call(releaseClip, undefined, timings.arcExit + 0.04);
 
       tl.fromTo(
         underlayRef.current,
@@ -354,8 +393,9 @@ export default function StoryCanvas() {
       tl.fromTo(sideCopyRef.current, { autoAlpha: 0, y: 16 }, { autoAlpha: 1, y: 0, duration: 0.12, ease: "power2.out" }, timings.outroFrame + 0.08);
 
       // swap images on the ACTUAL last layer 5 times
+      const carouselStart = timings.outroFrame + 0.12;
       OUTRO_IMAGES.forEach((src, i) => {
-        const at = 1.44 + i * 0.05; // quick cadence
+        const at = carouselStart + i * 0.06; // quick cadence
         tl.call(() => {
           const el = lastLayer();
           if (el) el.style.backgroundImage = `url(${src})`;
@@ -522,7 +562,7 @@ export default function StoryCanvas() {
       <style jsx>{`
         @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;500;600;700&display=swap');
         .story-root { position: relative; width: 100%; height: 800vh; background: #fcf7ea; color: #fff; }
-        .stage { position: sticky; top: 0; height: 100vh; width: 100%; overflow: hidden; isolation: isolate; will-change: clip-path; }
+        .stage { position: relative; height: 100vh; width: 100%; overflow: hidden; isolation: isolate; will-change: clip-path; }
         .underlay { position: absolute; inset: 0; background: #0b0b0b; z-index: 0; }
 
         .scene { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: 0; transform: translateZ(0); will-change: opacity; z-index: 1; }
@@ -699,6 +739,7 @@ export default function StoryCanvas() {
 
 
  
+
 
 
 
