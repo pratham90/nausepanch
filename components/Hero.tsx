@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from "react";
-import heroVideo from "../assets/hero.mov";
+import heroVideo from "../assets/hero.mp4";
 
 const Hero: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);

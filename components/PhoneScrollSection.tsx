@@ -44,7 +44,7 @@ export default function TrainNudgeScroll() {
   const WRAP_H = "min(31.5vw, 385px)"
   const LAST_SIZE = "19.6vh"
 
-  // nudge / zoom (width-only) - reduced zoom range and delta for viewport constraints
+  // nudge / zoom (width-only)
   const TOP_DELTA = 32,
     TOP_FROM_X = 0.92,
     TOP_TO_X = 1.08
@@ -59,38 +59,59 @@ export default function TrainNudgeScroll() {
   }
 
   const getSDirection = (i: number) => {
-    if (i < 4) return 1 // images 0-3: move right (top curve of S)
-    if (i < 8) return -1 // images 4-7: move left (middle curve of S)
-    return 1 // images 8-10: move right (bottom curve of S)
+    if (i < 3) return 1   // 0–3: right
+    if (i < 8) return -1  // 4–7: left
+    return 1              // 8–10: right
   }
 
   useEffect(() => {
-    const applyNudge = (
-      nodes: Element[] | NodeListOf<Element>,
-      opts: { delta: number; start: string; end: string; fromScaleX: number; toScaleX: number },
-    ) => {
-      const { delta, start, end, fromScaleX, toScaleX } = opts
-      gsap.utils.toArray<HTMLDivElement>(nodes).forEach((wrapper, i) => {
-        const img = wrapper.querySelector("img") as HTMLImageElement
-        if (!img) return
+   // add 'progressToward' option: default "left"
+const applyNudge = (
+  nodes: Element[] | NodeListOf<Element>,
+  opts: {
+    delta: number
+    start: string
+    end: string
+    fromScaleX: number
+    toScaleX: number
+    dirOverride?: 1 | -1
+    indexOffset?: number
+    progressToward?: "left" | "right"   // <-- NEW
+  },
+) => {
+  const {
+    delta, start, end, fromScaleX, toScaleX,
+    dirOverride, indexOffset = 0, progressToward = "left"
+  } = opts
 
-        const dir = getSDirection(i)
-        const fromWidth = 100 * fromScaleX
-        const toWidth = 100 * toScaleX
+  gsap.utils.toArray<HTMLDivElement>(nodes).forEach((wrapper, i) => {
+    const img = wrapper.querySelector("img") as HTMLImageElement
+    if (!img) return
 
-        gsap.set(wrapper, {
-          xPercent: dir * delta,
-          width: `${fromWidth}%`,
-          willChange: "transform, width",
-        })
-        gsap.to(wrapper, {
-          xPercent: -dir * delta,
-          width: `${toWidth}%`,
-          ease: "none",
-          scrollTrigger: { trigger: wrapper, start, end, scrub: true },
-        })
-      })
-    }
+    const gi  = i + indexOffset
+    const dir = dirOverride ?? getSDirection(gi)
+    const bx  = baseImgScaleX(gi)
+
+    const fromWidth = 100 * fromScaleX * bx
+    const toWidth   = 100 * toScaleX   * bx
+
+    // If we want to move RIGHT as we scroll, start on the left and end on the right
+    const startXP = (progressToward === "right" ? -dir :  dir) * delta
+    const endXP   = (progressToward === "right" ?  dir : -dir) * delta
+
+    gsap.set(wrapper, {
+      xPercent: startXP,
+      width: `${fromWidth}%`,
+      willChange: "transform, width",
+    })
+    gsap.to(wrapper, {
+      xPercent: endXP,
+      width: `${toWidth}%`,
+      ease: "none",
+      scrollTrigger: { trigger: wrapper, start, end, scrub: true },
+    })
+  })
+}
 
     // image sequences
     if (topRef.current) {
@@ -100,17 +121,22 @@ export default function TrainNudgeScroll() {
         end: "bottom 20%",
         fromScaleX: TOP_FROM_X,
         toScaleX: TOP_TO_X,
+        indexOffset: 0,
       })
     }
-    if (finalRef.current) {
-      applyNudge(finalRef.current.querySelectorAll("[data-nudge-final-wrapper]"), {
-        delta: LAST_DELTA,
-        start: "top 90%",
-        end: "bottom 10%",
-        fromScaleX: LAST_FROM_X,
-        toScaleX: LAST_TO_X,
-      })
-    }
+
+if (finalRef.current) {
+  applyNudge(finalRef.current.querySelectorAll("[data-nudge-final-wrapper]"), {
+    delta: LAST_DELTA,
+    start: "top 80%",        // feel tighter
+    end: "bottom 10%",
+    fromScaleX: LAST_FROM_X,
+    toScaleX: LAST_TO_X,
+    dirOverride: 1,          // S-tail ki direction (+1)
+    indexOffset: 8,          // width taper continuity
+    progressToward: "right", // <-- NOW THEY MOVE RIGHT WHILE SCROLLING
+  })
+}
 
     // right content (smooth pops)
     if (contentRef.current) {
@@ -161,13 +187,12 @@ export default function TrainNudgeScroll() {
       }
     }
 
-    // ============ CURTAIN SECTION (drowning text animation) ============
+    // ============ CURTAIN SECTION ============
     if (curtainRef.current && curtainImgRef.current && curtainTxtRef.current) {
       const img = curtainImgRef.current
       const txt = curtainTxtRef.current
 
-      // image starts fully above the section; then slides down behind the text
-      gsap.set(img, { yPercent: -100, scale: 1.06, willChange: "transform" }) // slight zoom for luxe feel
+      gsap.set(img, { yPercent: -100, scale: 1.06, willChange: "transform" })
       gsap.to(img, {
         yPercent: 0,
         scale: 1,
@@ -176,7 +201,7 @@ export default function TrainNudgeScroll() {
           trigger: curtainRef.current,
           start: "top 85%",
           end: "bottom 20%",
-          scrub: 1, // tied to scroll = true curtain feel
+          scrub: 1,
         },
       })
 
@@ -184,7 +209,6 @@ export default function TrainNudgeScroll() {
       gsap.set(words, { opacity: 0, scale: 0.9, y: 16 })
 
       words.forEach((word, index) => {
-        // Pop in animation - sequential one by one
         gsap.to(word, {
           opacity: 1,
           scale: 1,
@@ -197,8 +221,6 @@ export default function TrainNudgeScroll() {
             toggleActions: "play none none reverse",
           },
         })
-
-        // Drowning animation - sequential one by one
         gsap.to(word, {
           opacity: 0,
           y: 80,
@@ -247,19 +269,33 @@ export default function TrainNudgeScroll() {
         ref={finalRef}
         className="relative mx-auto max-w-[1400px] px-4 pt-0 pb-[18vh] min-h-[90vh] leading-none -mt-[1px]"
       >
-        <div className="grid grid-rows-3 gap-0 w-[45%] max-w-[500px]">
+        {/* CHANGED: no gap + stepped right like your sketch */}
+        <div className="flex flex-col w-[45%] max-w-[500px]">
           {IMAGES.slice(-3).map((src, i) => {
-            const scatter = i === 0 ? "translateX(-2vw)" : i === 1 ? "translateX(1.5vw)" : "translateX(3vw)"
+            // top (i=0) most right, middle (i=1) a bit right, bottom (i=2) left
+            const translateXvw = [6, 2, -2][i]
+            const mt = i === 0 ? "0" : "-1.6vh" // tighten vertical gap
+            const z = [3, 2, 1][i]
+
             return (
               <div
                 key={i}
                 data-nudge-final-wrapper
-                style={{ width: LAST_SIZE, height: LAST_SIZE, transform: scatter, overflow: "hidden" }}
+                style={{
+                  width: LAST_SIZE,
+                  height: LAST_SIZE,
+                  transform: `translateX(${translateXvw}vw)`,
+                  marginTop: mt,
+                  overflow: "hidden",
+                  position: "relative",
+                  zIndex: z,
+                }}
               >
                 <img
                   src={src || "/placeholder.svg"}
                   alt={`final-${i}`}
                   className="block w-full h-full object-cover rounded-[10px] shadow-[0_12px_32px_rgba(0,0,0,0.16)]"
+                  draggable={false}
                 />
               </div>
             )
