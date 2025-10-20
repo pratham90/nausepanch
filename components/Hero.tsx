@@ -8,12 +8,14 @@ const Hero: React.FC = () => {
     if (videoRef.current) {
       videoRef.current
         .play()
-        .catch((error) => console.error("Hero video autoplay was prevented:", error));
+        .catch((error) =>
+          console.error("Hero video autoplay was prevented:", error)
+        );
     }
   }, []);
 
   return (
-    <section className="h-screen w-full relative overflow-hidden flex items-center justify-center">
+    <section className="relative h-screen w-full overflow-hidden flex items-center">
       {/* Background Video */}
       <div className="absolute inset-0">
         <video
@@ -25,52 +27,43 @@ const Hero: React.FC = () => {
           muted
           playsInline
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/30 to-black/60"></div>
-
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/30 to-black/70"></div>
       </div>
 
-      {/* Foreground Content */}
-      <div className="relative z-10 w-full max-w-screen-xl mx-auto px-6 sm:px-8 lg:px-12">
-        <div className="flex flex-col md:flex-row gap-6 md:gap-12 items-start md:items-center">
-          {/* Left Section */}
-          <div className="w-full md:w-1/2 order-2 md:order-1">
-            <h1 className="font-serif text-cream leading-none tracking-tight">
-              <span className="block text-[3.4rem] sm:text-[4.8rem] md:text-[6.5rem] lg:text-[8rem] xl:text-[9rem] whitespace-nowrap">
-                Feel good fats
-              </span>
-              <span className="block text-[2.2rem] sm:text-[2.8rem] md:text-[3.6rem] lg:text-[4.4rem] xl:text-[5rem] mt-6 md:mt-10 lg:mt-14">
-                from scratch
-              </span>
-            </h1>
-          </div>
+      {/* Foreground */}
+      <div className="relative z-10 flex flex-col justify-between h-full w-full px-6 sm:px-10 lg:px-14 py-20">
+        {/* Heading */}
+        <div className="text-left mt-auto">
+<h1 className="font-serif font-thin text-cream leading-none tracking-tight">
+  <span className="block text-[3.8rem] sm:text-[5rem] md:text-[6.2rem] lg:text-[7.5rem] xl:text-[8.5rem]">
+    Feel good fats
+  </span>
+  <span className="block text-[3.8rem] sm:text-[5rem] md:text-[6.2rem] lg:text-[7.5rem] xl:text-[8.5rem]">
+    from scratch
+  </span>
+</h1>
 
-          {/* Right Section — moved to bottom */}
-          <div className="w-full md:w-1/2 order-1 md:order-2 relative">
-            <div className="absolute bottom-10 right-0 flex flex-col items-start md:items-end gap-6 z-10">
-              <p className="text-cream/80 text-base md:text-lg max-w-xs md:max-w-[320px]">
-                Pure, versatile, sustainably-made fats
-              </p>
-
-              <button
-                className="bg-cream text-brown py-3 px-6 rounded-md shadow-md hover:opacity-95 transition-all duration-300 group"
-              >
-                <span className="group-hover:tracking-tight transition-all duration-300">
-                  Watch
-                </span>
-                <span
-                  className="mx-1 group-hover:opacity-0 transition-all duration-200"
-                >
-                  —
-                </span>
-                <span className="group-hover:ml-1 transition-all duration-300">
-                  Episode
-                </span>
-              </button>
-            </div>
-          </div>
         </div>
 
-        {/* Bottom Scroll Icon */}
+        {/* Bottom Content — slightly left-shifted */}
+        <div className="absolute bottom-20 right-[8%] flex flex-col items-end gap-6 text-right md:right-[12%]">
+          <p className="text-cream/80 text-lg sm:text-xl md:text-2xl leading-snug max-w-xs md:max-w-sm text-left">
+            Pure, versatile, <br /> sustainably-made fats
+          </p>
+          <button className="bg-cream text-brown font-medium text-lg md:text-xl py-3 px-12 rounded-md shadow-md hover:opacity-95 transition-all duration-300 group">
+            <span className="group-hover:tracking-tight transition-all duration-300">
+              Watch
+            </span>
+            <span className="mx-1 group-hover:opacity-0 transition-all duration-200">
+              —
+            </span>
+            <span className="group-hover:ml-1 transition-all duration-300">
+              Episode
+            </span>
+          </button>
+        </div>
+
+        {/* Scroll Icon */}
         <a
           href="#process"
           aria-label="Scroll to next section"
