@@ -14,16 +14,22 @@ const CLIP_URL = "url(#storyReveal)"
 const RECT_PATH = "M0 0 L1 0 L1 1 L0 1 Z"
 
 const buildClipPath = (p: number) => {
-  const progress = clamp(p, 0, 1)
-  const base = clamp(0.92 - progress * 1.05, -0.25, 0.92)
-  const phase = progress < 0.45 ? progress / 0.45 : (progress - 0.45) / 0.55
-  const amplitude = progress < 0.45 ? lerp(-0.5, -0.1, phase) : lerp(-0.1, 0.45, phase)
+  // Allow progress to exceed 1 for post-flip upward drift
+  const clampedProgress = clamp(p, 0, 1)
+  
+  const base = clamp(0.92 - clampedProgress * 1.05, -0.25, 0.92)
+  const phase = clampedProgress < 0.45 ? clampedProgress / 0.45 : (clampedProgress - 0.45) / 0.55
+  const amplitude = clampedProgress < 0.45 ? lerp(-0.5, -0.1, phase) : lerp(-0.1, 0.45, phase)
   const cpY = clamp(base + amplitude, -0.35, 1.35)
   const cpY2 = clamp(base + amplitude * 0.92, -0.35, 1.35)
 
-  return ["M0", toFixed(base), "C0.25", toFixed(cpY), "0.75", toFixed(cpY2), "1", toFixed(base), "L1 1 L0 1 Z"].join(
-    " ",
-  )
+  // For progress > 1, offset the entire curve upward for smoother full reveal
+  const driftOffset = Math.max(0, (p - 1) * 1.0) // Drift upward faster to clear the viewport sooner
+  const offsetBase = base - driftOffset
+  const offsetCpY = cpY - driftOffset
+  const offsetCpY2 = cpY2 - driftOffset
+
+  return ["M0", toFixed(offsetBase), "C0.25", toFixed(offsetCpY), "0.75", toFixed(offsetCpY2), "1", toFixed(offsetBase), "L1 1 L0 1 Z"].join(" ")
 }
 
 const TRANSITION_SEQUENCE = ["./1.jpg", "./2.jpg", "./3.jpg", "./4.jpg", "./1.jpg"]
@@ -50,6 +56,7 @@ export default function StoryCanvas() {
   const initialClipPath = useMemo(() => buildClipPath(0), [])
   const underlayRef = useRef<HTMLDivElement | null>(null)
   const sceneRef = useRef<HTMLDivElement | null>(null)
+  const curtainRef = useRef<HTMLDivElement | null>(null)
 
   const g1 = useRef<HTMLDivElement | null>(null)
   const fromRef = useRef<HTMLDivElement | null>(null)
@@ -76,6 +83,14 @@ export default function StoryCanvas() {
   useLayoutEffect(() => {
     let removeListener: (() => void) | null = null
     const ctx = gsap.context(() => {
+      gsap.set(pin.current, { willChange: "transform, opacity" })
+      if (curtainRef.current) {
+        gsap.set(curtainRef.current, {
+          willChange: "transform, opacity, clip-path",
+          autoAlpha: 1,
+          yPercent: 0,
+        })
+      }
       if (dashedRef.current) {
         const L = dashedRef.current.getTotalLength()
         gsap.set(dashedRef.current, { strokeDasharray: "10 10", strokeDashoffset: L, autoAlpha: 0 })
@@ -97,23 +112,23 @@ export default function StoryCanvas() {
       let clipReleased = false
 
       const releaseClip = () => {
-        if (!pin.current) return
-        pin.current.style.clipPath = "none"
-        pin.current.style.webkitClipPath = "none"
+        if (!curtainRef.current) return
+        curtainRef.current.style.clipPath = "none"
+        curtainRef.current.style.webkitClipPath = "none"
         if (clipPathRef.current) clipPathRef.current.setAttribute("d", RECT_PATH)
         clipReleased = true
       }
 
       const reapplyClip = () => {
-        if (!pin.current) return
-        pin.current.style.clipPath = CLIP_URL
-        pin.current.style.webkitClipPath = CLIP_URL
+        if (!curtainRef.current) return
+        curtainRef.current.style.clipPath = CLIP_URL
+        curtainRef.current.style.webkitClipPath = CLIP_URL
         clipReleased = false
       }
 
       const applyClip = () => {
         if (!clipPathRef.current) return
-        if (clipState.value >= 1.01) {
+        if (clipState.value >= 2.0) {
           releaseClip()
           return
         }
@@ -136,9 +151,16 @@ export default function StoryCanvas() {
         )
       }
 
-      tl.to(clipState, { value: 0.55, duration: 0.16, ease: "power2.inOut", onUpdate: applyClip }, 0)
-      tl.to(clipState, { value: 1, duration: 0.36, ease: "power2.out", onUpdate: applyClip }, 0.16)
-      tl.call(releaseClip, undefined, 0.54)
+ tl.to(clipState, { value: 0.55, duration: 0.22, ease: "power2.inOut", onUpdate: applyClip }, 0)
+
+// Extended flip phase with stronger post-flip drift (progress 0.55 → 1.20)
+tl.to(clipState, { value: 1.2, duration: 0.52, ease: "power2.out", onUpdate: applyClip }, 0.22)
+
+// Curtain lifts and fades while background stays fixed
+tl.to(curtainRef.current, { yPercent: -16, autoAlpha: 0, duration: 0.38, ease: "power2.inOut" }, 0.22)
+
+// Remove clip from curtain shortly after fade completes
+tl.call(releaseClip, undefined, 0.62)
 
       const transitionTimings = [
         { time: TIMINGS.g1Copy, image: TRANSITION_SEQUENCE[0] },
@@ -205,6 +227,9 @@ export default function StoryCanvas() {
         tl.to(path, { autoAlpha: 1, duration: 0.04, ease: "power1.out" }, at)
         tl.to(path, { strokeDashoffset: 0, duration: dur, ease: "none", ...(extra?.to ?? {}) }, at + 0.02)
       }
+
+      // pin remains static; ensure it's visible
+      tl.set(pin.current, { autoAlpha: 1 }, Math.max(0, TIMINGS.g1Copy - 0.02))
 
       riseIn(fromRef.current, TIMINGS.g1Copy + 0.08, 0.1)
       strokeDraw(lineRef.current, TIMINGS.g1Copy + 0.1, 0.08)
@@ -389,18 +414,30 @@ export default function StoryCanvas() {
     <div ref={root} className="story-root">
       <svg width="0" height="0" className="defs" aria-hidden>
         <defs>
-          <clipPath id="storyReveal" clipPathUnits="objectBoundingBox">
-            <path ref={clipPathRef} d={initialClipPath} />
-          </clipPath>
+         <mask id="storyRevealMask" maskContentUnits="objectBoundingBox">
+   {/* base white = show curtain everywhere */}
+   <rect x="0" y="0" width="1" height="1" fill="white" />
+   {/* black path = hole (transparent) */}
+   <path ref={clipPathRef} d={initialClipPath} fill="black" />
+ </mask>
         </defs>
       </svg>
 
-      <div ref={pin} className="stage" style={{ clipPath: "url(#storyReveal)", WebkitClipPath: "url(#storyReveal)" }}>
+      <div ref={pin} className="stage">
         <div ref={underlayRef} className="underlay" />
 
         <div className="scene-container">
           <div ref={sceneRef} className="scene" style={{ backgroundImage: `url(${TRANSITION_SEQUENCE[0]})` }} />
         </div>
+
+<div
+   ref={curtainRef}
+   className="curtain"
+   style={{
+     mask: "url(#storyRevealMask)",
+     WebkitMask: "url(#storyRevealMask)"
+   }}
+ />
 
         <div className="group1 copy" ref={g1}>
           <div className="from" ref={fromRef}>
@@ -505,7 +542,8 @@ export default function StoryCanvas() {
   .stage { position: sticky; top: 0; height: 100vh; width: 100%; overflow: hidden; isolation: isolate; will-change: clip-path; }
   .underlay { position: absolute; inset: 0; background: #ffffff; z-index: 0; }
   .scene { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: 1; z-index: 1; }
-  .copy, .group1, .group2 { z-index: 2; position: absolute; inset: 0; pointer-events: none; }
+  .curtain { position: absolute; inset: 0; background: #fcf7ea; z-index: 2; }
+  .copy, .group1, .group2 { z-index: 3; position: absolute; inset: 0; pointer-events: none; }
 
   .from { position: absolute; top: 18%; left: 8%; font-family: ui-serif, Georgia, Times, serif; font-size: min(2.9vw, 36px); line-height: 1.12; font-weight: 700; text-shadow: 0 1px 0 rgba(0,0,0,.25); }
   .from-line { position: absolute; top: 55%; left: calc(100% + 12px); width: 12vw; height: 3px; }
