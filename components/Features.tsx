@@ -131,10 +131,9 @@ export default function StoryCanvas() {
         tl.to(arcSvgRef.current, { scaleX: 1, scaleY: 1.12, duration: 0.1, ease: "power2.out" }, arcStart + 0.12)
         tl.to(
           arcSvgRef.current,
-          { scaleX: 0.32, scaleY: 0.72, yPercent: -210, autoAlpha: 0, duration: 0.12, ease: "power3.in" },
+          { scaleX: 0.32, scaleY: 0.72, yPercent: -210, autoAlpha: 0.8, duration: 0.36, ease: "power2.inOut" },
           arcStart + 0.22,
         )
-        tl.set(arcSvgRef.current, { autoAlpha: 0 }, TIMINGS.g1Copy - 0.1)
       }
 
       tl.to(clipState, { value: 0.55, duration: 0.16, ease: "power2.inOut", onUpdate: applyClip }, 0)

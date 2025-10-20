@@ -255,7 +255,7 @@ export default function TrainNudgeScroll() {
   }, [])
 
   return (
-    <div className="bg-[#fbf2e2] overflow-hidden">
+    <div className="bg-white overflow-hidden">
       {/* ===== TOP 8 ===== */}
       <section ref={topRef} className="mx-auto max-w-[800px] px-4 leading-none">
         {IMAGES.slice(0, 8).map((src, i) => (
