@@ -175,8 +175,8 @@ export default function StoryCanvas() {
         Math.max(0, TIMINGS.g3Exit - 0.08),
       )
 
-      tl.to(sceneRef.current, { opacity: 0, duration: 0.15, ease: "power1.inOut" }, TIMINGS.g3Exit - 0.05)
-      tl.to(sceneRef.current, { opacity: 1, duration: 0.15, ease: "power1.inOut" }, TIMINGS.g3Exit + 0.1)
+      //tl.to(sceneRef.current, { opacity: 0, duration: 0.15, ease: "power1.inOut" }, TIMINGS.g3Exit - 0.05)
+      //tl.to(sceneRef.current, { opacity: 1, duration: 0.15, ease: "power1.inOut" }, TIMINGS.g3Exit + 0.1)
 
       const riseIn = (el: Element | null, at: number, dur = 0.1, y = 36, extra?: gsap.TweenVars) => {
         if (!el) return
