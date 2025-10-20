@@ -2,155 +2,124 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
-/* ---------------- SavorWordReveal ----------------
-   - Triggers when heading enters the viewport.
-   - Staggers letters with easing, opacity, and subtle lift.
-   - Respects prefers-reduced-motion (no animation).
---------------------------------------------------- */
-
-type SavorWordRevealProps = {
-  text: string;
-  /** milliseconds for the full word to complete revealing */
-  durationMs?: number;
-  /** per-letter delay in ms (stagger) */
-  perCharDelayMs?: number;
-  /** optional once-only trigger (default: true) */
-  once?: boolean;
-  /** threshold for intersection (0..1) */
-  threshold?: number;
-};
-
-const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+/* ----------------- Helpers ----------------- */
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-const SavorWordReveal: React.FC<SavorWordRevealProps> = ({
-  text,
-  durationMs = 900,
-  perCharDelayMs = 45,
-  once = true,
-  threshold = 0.25,
+/* ----------------- Ink Animation ----------------- */
+const SavorInkStaggerTimed: React.FC<{
+  word?: string;
+  replayOnReenter?: boolean;
+  threshold?: number;
+  totalMs?: number;
+  perCharDelayMs?: number;
+  edgeScale?: number;
+  fontPx?: number;
+  trackingEm?: number;
+}> = ({
+  word = "savor",
+  replayOnReenter = true,
+  threshold = 0.5,
+  totalMs = 4800,       // 🕰️ 4× slower (1200 → 4800)
+  perCharDelayMs = 480, // 🕰️ 4× slower (120 → 480)
+  edgeScale = 28,
+  fontPx = 370,
+  trackingEm = -0.045,
 }) => {
-  const headingRef = useRef<HTMLHeadingElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
-  const startTimeRef = useRef<number | null>(null);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [hasPlayed, setHasPlayed] = useState(false);
+  const startRef = useRef<number | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [hasPlayedOnce, setHasPlayedOnce] = useState(false);
 
-  const reducedMotion = useMemo(
+  const reduced = useMemo(
     () =>
       typeof window !== "undefined" &&
-      window.matchMedia &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,
     []
   );
 
-  const chars = useMemo(() => text.split(""), [text]);
-  const totalChars = chars.length;
+  const letters = useMemo(() => word.split(""), [word]);
+  const n = letters.length;
 
-  // Precompute each char's delay (so re-renders don't change the timeline)
-  const delays = useMemo(() => {
-    const arr = new Array(totalChars).fill(0).map((_, i) => i * perCharDelayMs);
-    return arr;
-  }, [totalChars, perCharDelayMs]);
+  // layout
+  const vw = 1400;
+  const vh = 380;
+  const letterBox = 200;
+  const totalW = letterBox * n;
+  const startX = (vw - totalW) / 2 + letterBox / 2;
+  const baseY = vh * 0.57;
+  const scaleY = 1.26;
+  const translateFix = -(baseY) * (scaleY - 1);
+  const rMax = 820;
 
-  // The animated state for each char (opacity + y)
-  const [charStates, setCharStates] = useState(
-    () =>
-      new Array(totalChars).fill(0).map(() => ({
-        o: reducedMotion ? 1 : 0,
-        y: reducedMotion ? 0 : 10, // slight lift
-        b: reducedMotion ? 0 : 6, // blur in px
-      }))
-  );
+  const [radii, setRadii] = useState<number[]>(() => Array(n).fill(0));
 
-  // Reset when text changes
   useEffect(() => {
-    setCharStates(
-      new Array(totalChars).fill(0).map(() => ({
-        o: reducedMotion ? 1 : 0,
-        y: reducedMotion ? 0 : 10,
-        b: reducedMotion ? 0 : 6,
-      }))
-    );
-    setIsAnimating(false);
-    setHasPlayed(false);
-    startTimeRef.current = null;
-  }, [text, totalChars, reducedMotion]);
+    setRadii(Array(n).fill(reduced ? rMax : 0));
+    setPlaying(false);
+    startRef.current = null;
+    setHasPlayedOnce(false);
+  }, [word, n, reduced]);
 
-  // IntersectionObserver to start the animation
+  // Intersection trigger
   useEffect(() => {
-    if (reducedMotion) return;
-
-    const el = headingRef.current;
-    if (!el) return;
-
+    const el = wrapRef.current;
+    if (!el || reduced) return;
     const io = new IntersectionObserver(
       (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            if (once && hasPlayed) return;
-            // kick off animation
-            setIsAnimating(true);
-            if (once) setHasPlayed(true);
-            break;
-          } else if (!once) {
-            // allow replay if not once
-            setIsAnimating(false);
-            startTimeRef.current = null;
+        for (const e of entries) {
+          if (e.isIntersecting && e.intersectionRatio >= threshold) {
+            if (!replayOnReenter && hasPlayedOnce) return;
+            setPlaying(true);
+            setHasPlayedOnce(true);
+          } else if (replayOnReenter) {
+            setPlaying(false);
+            startRef.current = null;
+            setRadii(Array(n).fill(0));
           }
         }
       },
-      {
-        root: null,
-        threshold,
-      }
+      { threshold: [0, threshold, 1] }
     );
-
     io.observe(el);
-    return () => {
-      io.disconnect();
-    };
-  }, [once, threshold, hasPlayed, reducedMotion]);
+    return () => io.disconnect();
+  }, [threshold, replayOnReenter, hasPlayedOnce, n, reduced]);
 
-  // RAF-driven animation loop
+  // Animation (time-based)
   useEffect(() => {
-    if (reducedMotion) return;
-    if (!isAnimating) {
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
+    if (reduced) {
+      setRadii(Array(n).fill(rMax));
+      return;
+    }
+    if (!playing) {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
       return;
     }
 
-    const totalDuration = durationMs + delays[delays.length - 1]; // include trailing delay
+    const perLetterSpan = totalMs - perCharDelayMs * (n - 1);
 
     const tick = (t: number) => {
-      if (startTimeRef.current == null) startTimeRef.current = t;
-      const elapsed = t - startTimeRef.current;
+      if (startRef.current == null) startRef.current = t;
+      const elapsed = t - startRef.current;
 
-      // Update each character based on its local progress
-      setCharStates((prev) =>
-        prev.map((state, i) => {
-          const local = clamp01((elapsed - delays[i]) / durationMs);
-          const e = easeOutCubic(local);
-          return {
-            o: e, // opacity
-            y: (1 - e) * 10, // translateY from 10px → 0
-            b: (1 - e) * 6, // blur from 6px → 0
-          };
+      setRadii(() =>
+        Array.from({ length: n }, (_, i) => {
+          const localStart = i * perCharDelayMs;
+          const localT = clamp01((elapsed - localStart) / perLetterSpan);
+          const e = easeOutCubic(localT);
+          return lerp(0, rMax, e);
         })
       );
 
-      if (elapsed < totalDuration) {
+      if (elapsed < totalMs) {
         rafRef.current = requestAnimationFrame(tick);
       } else {
-        // ensure we end at final state
-        setCharStates((prev) =>
-          prev.map(() => ({ o: 1, y: 0, b: 0 }))
-        );
+        setRadii(Array(n).fill(rMax));
         rafRef.current = null;
-        setIsAnimating(false);
+        setPlaying(false);
       }
     };
 
@@ -159,51 +128,78 @@ const SavorWordReveal: React.FC<SavorWordRevealProps> = ({
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
-  }, [isAnimating, delays, durationMs, reducedMotion]);
+  }, [playing, totalMs, perCharDelayMs, n, reduced]);
 
   return (
-    <h1
-      ref={headingRef}
-      aria-label={text}
-      className="font-serif text-[35vw] md:text-[30vw] lg:text-[26vw] leading-none text-brand-brown select-none flex justify-center"
-      style={{
-        transform: "scaleY(1.6)",
-        filter: "none",
-      }}
-    >
-      {chars.map((char, i) => {
-        const s = charStates[i] ?? { o: 1, y: 0, b: 0 };
-        return (
-          <span
-            key={i}
-            style={{
-              display: "inline-block",
-              opacity: s.o,
-              transform: `translateY(${s.y}px)`,
-              filter: `blur(${s.b}px)`,
-              willChange: "opacity, transform, filter",
-              transition: reducedMotion ? "none" : undefined,
-            }}
-          >
-            {char}
-          </span>
-        );
-      })}
-    </h1>
+    <div ref={wrapRef} className="w-full">
+      <svg
+        className="block w-full"
+        viewBox={`0 0 ${vw} ${vh}`}
+        preserveAspectRatio="xMidYMid meet"
+        role="img"
+        aria-label={word}
+        style={{ overflow: "visible" }}
+      >
+        <defs>
+          <filter id="inkDistort" x="-200%" y="-200%" width="500%" height="500%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="3" seed="9" result="noise" />
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale={edgeScale} xChannelSelector="R" yChannelSelector="G" />
+            <feGaussianBlur stdDeviation="2.1" />
+          </filter>
+          <filter id="inkBleed" x="-150%" y="-150%" width="400%" height="400%">
+            <feGaussianBlur stdDeviation="0.35" result="blur" />
+            <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" result="turb" />
+            <feDisplacementMap in="blur" in2="turb" scale="1.6" xChannelSelector="R" yChannelSelector="G" result="distort" />
+            <feMerge><feMergeNode in="distort" /></feMerge>
+          </filter>
+        </defs>
+
+        {letters.map((ch, i) => {
+          const cx = startX + i * letterBox;
+          const r = radii[i] ?? 0;
+          const maskId = `mask-${i}`;
+          return (
+            <g key={`g-${i}`}>
+              <mask id={maskId}>
+                <rect width={vw} height={vh} fill="black" />
+                <g filter="url(#inkDistort)">
+                  <circle cx={cx} cy={baseY} r={r} fill="white" />
+                  <circle cx={cx + 14} cy={baseY - 10} r={r * 0.05} fill="white" opacity="0.35" />
+                  <circle cx={cx - 16} cy={baseY + 12} r={r * 0.06} fill="white" opacity="0.25" />
+                </g>
+              </mask>
+              <text
+                x={cx}
+                y={baseY}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                className="font-serif"
+                transform={`scale(1,${scaleY}) translate(0, ${translateFix})`}
+                style={{ fontSize: `${fontPx}px`, letterSpacing: `${trackingEm}em` }}
+                fill="currentColor"
+                mask={`url(#${maskId})`}
+                filter="url(#inkBleed)"
+              >
+                {ch}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
   );
 };
 
-/* ---------------- Footer ---------------- */
-
+/* ----------------- Footer ----------------- */
 const Footer: React.FC = () => {
   const navLinks1 = ["Home", "Process", "Foods", "Mission", "Journal", "Contact"];
   const navLinks2 = ["LinkedIn", "Instagram"];
   const legalLinks = ["Press Kit", "Terms of Service", "Privacy Policy"];
 
   return (
-    <footer className="bg-cream text-brand-brown pt-20 md:pt-32 pb-10 overflow-hidden">
+    <footer className="bg-cream text-brand-brown pt-16 md:pt-20 pb-10 overflow-hidden">
       <div className="container mx-auto px-6 md:px-8">
-        <div className="flex flex-col md:flex-row justify-between items-start text-sm mb-24 md:mb-32">
+        <div className="flex flex-col md:flex-row justify-between items-start text-sm mb-16 md:mb-20">
           <div className="flex gap-x-12 sm:gap-x-20">
             <ul className="space-y-3">
               {navLinks1.map((link) => (
@@ -235,12 +231,20 @@ const Footer: React.FC = () => {
           </div>
         </div>
 
-        <div className="relative text-center w-full my-16 md:my-24">
-          {/* Adjust perCharDelayMs/durationMs to taste */}
-          <SavorWordReveal text="savor" perCharDelayMs={55} durationMs={850} />
+        {/* Centerpiece */}
+        <div className="relative text-center w-full my-8 md:my-12 text-brand-brown">
+          <SavorInkStaggerTimed
+            replayOnReenter={true}
+            threshold={0.5}
+            totalMs={4800}       // ⏳ ultra slow 4×
+            perCharDelayMs={480} // ⏳ ultra smooth stagger
+            edgeScale={28}
+            fontPx={370}
+            trackingEm={-0.045}
+          />
         </div>
 
-        <div className="mt-12 md:mt-16 border-t border-brand-brown/20 pt-8 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-brand-brown-light/80">
+        <div className="mt-8 md:mt-10 border-t border-brand-brown/20 pt-8 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-brand-brown-light/80">
           <div className="flex flex-wrap gap-x-4 justify-center md:justify-start">
             {legalLinks.map((link) => (
               <a key={link} href="#" className="hover:text-brand-brown">
