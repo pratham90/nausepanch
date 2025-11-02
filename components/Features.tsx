@@ -28,9 +28,9 @@ const buildClipPath = (p: number) => {
   return ["M0", toFixed(offsetBase), "C0.25", toFixed(offsetCpY), "0.75", toFixed(offsetCpY2), "1", toFixed(offsetBase), "L1 1 L0 1 Z"].join(" ")
 }
 
-const buildCircularMask = (p: number) => {
-  const centerY = 0.30
-  const maxRadius = 1.8
+const buildCircularMask = (p: number, isMobile = false) => {
+  const centerY = isMobile ? 0.15 : 0.30
+  const maxRadius = isMobile ? 1.2 : 1.8
   const radius = p * maxRadius
   return `radial-gradient(circle ${radius * 100}% at 50% ${centerY * 100}%, black 0%, transparent 100%)`
 }
@@ -69,6 +69,8 @@ export default function StoryCanvas() {
   const lineRef = useRef<SVGPathElement | null>(null)
   const arcRef = useRef<SVGPathElement | null>(null)
   const arcSvgRef = useRef<SVGSVGElement | null>(null)
+  const arcMobileSvgRef = useRef<SVGSVGElement | null>(null)
+  const arcMobileRef = useRef<SVGPathElement | null>(null)
 
   const g2 = useRef<HTMLDivElement | null>(null)
   const wLinesRef = useRef<HTMLDivElement | null>(null)
@@ -122,7 +124,7 @@ export default function StoryCanvas() {
         if (!curtainRef.current) return
         curtainRef.current.style.clipPath = "none"
         curtainRef.current.style.webkitClipPath = "none"
-        if (clipPathRef.current && !isMobileRef.current) {
+        if (clipPathRef.current) {
           clipPathRef.current.setAttribute("d", RECT_PATH)
         }
         clipReleased = true
@@ -136,24 +138,14 @@ export default function StoryCanvas() {
       }
 
       const applyClip = () => {
-        if (isMobileRef.current) {
-          if (!curtainRef.current) return
-          if (clipState.value >= 2.0) {
-            releaseClip()
-            return
-          }
-          const mask = buildCircularMask(clipState.value)
-          curtainRef.current.style.WebkitMask = mask
-          curtainRef.current.style.mask = mask
-        } else {
-          if (!clipPathRef.current) return
-          if (clipState.value >= 2.0) {
-            releaseClip()
-            return
-          }
-          if (clipReleased) reapplyClip()
-          clipPathRef.current.setAttribute("d", buildClipPath(clipState.value))
+        // Use exact same U-shaped clip-path animation for both mobile and desktop
+        if (!clipPathRef.current) return
+        if (clipState.value >= 2.0) {
+          releaseClip()
+          return
         }
+        if (clipReleased) reapplyClip()
+        clipPathRef.current.setAttribute("d", buildClipPath(clipState.value))
       }
 
       applyClip()
@@ -169,6 +161,14 @@ export default function StoryCanvas() {
           { scaleX: 0.32, scaleY: 0.72, yPercent: -210, autoAlpha: 0.8, duration: 0.36, ease: "power2.inOut" },
           arcStart + 0.22,
         )
+      }
+
+      // Mobile arc animation
+      if (arcMobileSvgRef.current && isMobileRef.current) {
+        gsap.set(arcMobileSvgRef.current, { transformOrigin: "50% 0%", scaleX: 1, scaleY: 1.2, autoAlpha: 0, yPercent: 0 })
+        const arcMobileStart = TIMINGS.g1Copy - 0.46
+        tl.to(arcMobileSvgRef.current, { autoAlpha: 1, duration: 0.03, ease: "power1.out" }, arcMobileStart)
+        tl.to(arcMobileSvgRef.current, { scaleY: 1, duration: 0.15, ease: "power2.inOut" }, arcMobileStart)
       }
 
       tl.to(clipState, { value: 0.55, duration: 0.22, ease: "power2.inOut", onUpdate: applyClip }, 0)
@@ -246,8 +246,18 @@ export default function StoryCanvas() {
       riseIn(palmRef.current, TIMINGS.g1Copy + 0.2, 0.12)
       tl.set(arcSvgRef.current, { autoAlpha: 1, scaleX: 1, scaleY: 1, yPercent: 0 }, TIMINGS.g1Copy + 0.26)
       strokeDraw(arcRef.current, TIMINGS.g1Copy + 0.28, 0.14)
+      
+      // Mobile arc stroke draw
+      if (arcMobileRef.current && isMobileRef.current) {
+        tl.set(arcMobileSvgRef.current, { autoAlpha: 1, scaleX: 1, scaleY: 1 }, TIMINGS.g1Copy + 0.26)
+        strokeDraw(arcMobileRef.current, TIMINGS.g1Copy + 0.28, 0.14)
+      }
+      
       riseIn(craftRef.current, TIMINGS.g1Copy + 0.34, 0.14)
       tl.to(arcRef.current, { autoAlpha: 0, duration: 0.1 }, TIMINGS.g1Exit + 0.02)
+      if (arcMobileRef.current && isMobileRef.current) {
+        tl.to(arcMobileRef.current, { autoAlpha: 0, duration: 0.1 }, TIMINGS.g1Exit + 0.02)
+      }
       tl.to(g1.current, { yPercent: -38, duration: 0.14, ease: "power2.inOut" }, TIMINGS.g1Exit)
       tl.to(g1.current, { autoAlpha: 0, duration: 0.08 }, TIMINGS.g1Exit + 0.08)
 
@@ -480,6 +490,8 @@ export default function StoryCanvas() {
           ref={curtainRef}
           className="curtain"
           style={{
+            clipPath: CLIP_URL,
+            WebkitClipPath: CLIP_URL,
             mask: "url(#storyRevealMask)",
             WebkitMask: "url(#storyRevealMask)"
           }}
@@ -509,6 +521,16 @@ export default function StoryCanvas() {
               fill="none"
               stroke="currentColor"
               strokeWidth="1.5"
+              vectorEffect="non-scaling-stroke"
+            />
+          </svg>
+          <svg ref={arcMobileSvgRef} className="arc-mobile" viewBox="0 0 360 240" preserveAspectRatio="none" aria-hidden>
+            <path
+              ref={arcMobileRef}
+              d="M350 30 C 310 90, 160 160, 10 220"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
               vectorEffect="non-scaling-stroke"
             />
           </svg>
@@ -612,6 +634,7 @@ export default function StoryCanvas() {
   .from-line { position: absolute; top: 55%; left: calc(100% + 12px); width: 12vw; height: 3px; }
   .palm { position: absolute; top: 18%; left: calc(8% + 14vw + 140px + 24px); font-family: ui-serif, Georgia, Times, serif; font-size: min(2.9vw, 36px); line-height: 1.12; font-weight: 700; }
   .arc { position: absolute; top: 22%; left: calc(8% + 8vw + 140px + 8vw); width: 28vw; height: 22vw; overflow: visible; }
+  .arc-mobile { display: none; }
   .craft { position: absolute; top: 62%; left: calc(8% + 8vw + 140px + 8vw + 20vw + 32px); transform: translateY(-50%); max-width: 32vw; font-family: ui-serif, Georgia, Times, serif; font-size: min(2.4vw, 28px); line-height: 1.22; font-weight: 600; }
 
   .without { position: absolute; top: 18%; left: 16%; display: grid; gap: .6rem 3vw; grid-auto-rows: min-content; font-family: ui-serif, Georgia, Times, serif; font-size: min(2.2vw, 28px); line-height: 1.24; }
@@ -713,33 +736,47 @@ export default function StoryCanvas() {
     .story-root { height: 800vh; }
     
     .from { 
-      font-size: 7.2vw; 
-      top: 12%; 
+      font-size: clamp(28px, 9vw, 40px); 
+      top: 15%; 
       left: 5.5%;
-      max-width: 90vw;
+      max-width: 30vw;
+      line-height: 1.12;
     } 
     .from-line { 
-      width: 22vw; 
-      top: 55%;
+      width: 20vw; 
+      height: 2px;
+      top: 15%;
+      left: calc(5.5% + 28vw);
     }
     .palm { 
-      left: 5.5%;
-      top: 18%;
-      font-size: 7.2vw; 
-      max-width: 90vw;
+      left: calc(5.5% + 28vw + 20vw + 2vw);
+      top: 15%;
+      font-size: clamp(28px, 9vw, 40px); 
+      max-width: 35vw;
+      line-height: 1.12;
     }
     .arc { 
+      display: none;
+    }
+    .arc-mobile {
+      position: absolute;
       left: 5.5%;
-      width: 90vw;
-      height: 45vw;
-      top: 25%;
+      width: calc(5.5% + 28vw + 20vw + 2vw + 35vw - 5.5%);
+      height: 30vh;
+      top: 21%;
+      transform-origin: right top;
+      overflow: visible;
+      z-index: 1;
+      display: block !important;
     }
     .craft { 
       left: 5.5%;
-      top: 55%;
-      max-width: 90vw;
-      font-size: 5.8vw;
+      top: 47%;
+      max-width: 85vw;
+      font-size: clamp(20px, 6vw, 26px);
       transform: none;
+      line-height: 1.22;
+      z-index: 2;
     }
     
     .without { 
@@ -794,6 +831,13 @@ export default function StoryCanvas() {
     
     .stage {
       z-index: 1;
+    }
+    
+    .curtain {
+      height: 60vh !important;
+      top: 0 !important;
+      bottom: auto !important;
+      transform-origin: top center !important;
     }
     
     .outro-mobile-section {
