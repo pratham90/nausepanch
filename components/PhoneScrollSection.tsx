@@ -262,7 +262,7 @@ export default function TrainNudgeScroll() {
           <figure
             key={i}
             data-nudge-wrapper
-            className="relative mx-auto"
+            className="relative mx-auto mobile-image-wrapper"
             style={{
               width: WRAP_W,
               height: WRAP_H,
@@ -284,10 +284,10 @@ export default function TrainNudgeScroll() {
       {/* ===== LAST 3 + RIGHT CONTENT ===== */}
       <section
         ref={finalRef}
-        className="relative mx-auto max-w-[1400px] px-4 pt-0 pb-[18vh] min-h-[90vh] leading-none -mt-[1px]"
+        className="relative mx-auto max-w-[1400px] px-4 pt-0 pb-[18vh] min-h-[90vh] leading-none -mt-[1px] mobile-final-section flex"
       >
         {/* stepped-right, no visible vertical gap */}
-        <div className="flex flex-col w-[45%] max-w-[500px]">
+        <div className="flex flex-col w-[45%] max-w-[500px] mobile-images-container">
           {IMAGES.slice(-3).map((src, i) => {
             const translateXvw = [6, 2.5, -1][i]
             // kill visible gap; a hair negative to counter border radius/shadow
@@ -298,6 +298,7 @@ export default function TrainNudgeScroll() {
               <div
                 key={i}
                 data-nudge-final-wrapper
+                className="mobile-final-image"
                 style={{
                   width: LAST_SIZE,
                   height: LAST_SIZE,
@@ -321,7 +322,7 @@ export default function TrainNudgeScroll() {
 
         <aside
           ref={contentRef}
-          className="absolute right-[4vw] top-1/2 -translate-y-1/2 w-[32%] max-w-[520px] select-none"
+          className="absolute right-[4vw] top-1/2 -translate-y-1/2 w-[32%] max-w-[520px] select-none mobile-content"
         >
           <h2 className="font-serif text-[#3b1510] text-[6rem] leading-[1.06]">
             <div ref={l1Ref} className="flex flex-wrap gap-x-[0.5rem]">
@@ -383,6 +384,71 @@ export default function TrainNudgeScroll() {
           </div>
         </div>
       </section>
+      
+      <style jsx>{`
+        @media (max-width: 640px) {
+          .mobile-image-wrapper {
+            width: min(70vw, 280px) !important;
+            height: min(31.5vw, 280px) !important;
+            max-width: calc(100vw - 40px) !important;
+          }
+          
+          .mobile-final-section {
+            flex-direction: column !important;
+            display: flex !important;
+            align-items: center !important;
+          }
+          
+          .mobile-images-container {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 auto !important;
+            gap: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+          }
+          
+          .mobile-final-image {
+            width: min(70vw, 280px) !important;
+            height: min(31.5vw, 280px) !important;
+            margin: 0 auto !important;
+          }
+          
+          /* Override inline negative marginTop that's used for desktop overlapping */
+          .mobile-final-image[style*="marginTop"] {
+            margin-top: 0 !important;
+          }
+          
+          /* Ensure no gaps between images */
+          .mobile-images-container > .mobile-final-image + .mobile-final-image {
+            margin-top: 0 !important;
+          }
+          
+          .mobile-content {
+            position: relative !important;
+            right: auto !important;
+            top: auto !important;
+            transform: none !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin-top: 4vh !important;
+            padding: 0 4vw !important;
+            text-align: center !important;
+          }
+          
+          .mobile-content h2 {
+            font-size: 2.5rem !important;
+            line-height: 1.1 !important;
+          }
+          
+          .mobile-content .mt-6 {
+            margin-top: 1.5rem !important;
+            font-size: 1rem !important;
+            text-align: center !important;
+          }
+        }
+      `}</style>
     </div>
   )
 }

@@ -14,22 +14,25 @@ const CLIP_URL = "url(#storyReveal)"
 const RECT_PATH = "M0 0 L1 0 L1 1 L0 1 Z"
 
 const buildClipPath = (p: number) => {
-  // Allow progress to exceed 1 for post-flip upward drift
   const clampedProgress = clamp(p, 0, 1)
-  
   const base = clamp(0.92 - clampedProgress * 1.05, -0.25, 0.92)
   const phase = clampedProgress < 0.45 ? clampedProgress / 0.45 : (clampedProgress - 0.45) / 0.55
   const amplitude = clampedProgress < 0.45 ? lerp(-0.5, -0.1, phase) : lerp(-0.1, 0.45, phase)
   const cpY = clamp(base + amplitude, -0.35, 1.35)
   const cpY2 = clamp(base + amplitude * 0.92, -0.35, 1.35)
-
-  // For progress > 1, offset the entire curve upward for smoother full reveal
-  const driftOffset = Math.max(0, (p - 1) * 1.0) // Drift upward faster to clear the viewport sooner
+  const driftOffset = Math.max(0, (p - 1) * 1.0)
   const offsetBase = base - driftOffset
   const offsetCpY = cpY - driftOffset
   const offsetCpY2 = cpY2 - driftOffset
 
   return ["M0", toFixed(offsetBase), "C0.25", toFixed(offsetCpY), "0.75", toFixed(offsetCpY2), "1", toFixed(offsetBase), "L1 1 L0 1 Z"].join(" ")
+}
+
+const buildCircularMask = (p: number) => {
+  const centerY = 0.30
+  const maxRadius = 1.8
+  const radius = p * maxRadius
+  return `radial-gradient(circle ${radius * 100}% at 50% ${centerY * 100}%, black 0%, transparent 100%)`
 }
 
 const TRANSITION_SEQUENCE = ["./1.jpg", "./2.jpg", "./3.jpg", "./4.jpg", "./1.jpg"]
@@ -57,6 +60,7 @@ export default function StoryCanvas() {
   const underlayRef = useRef<HTMLDivElement | null>(null)
   const sceneRef = useRef<HTMLDivElement | null>(null)
   const curtainRef = useRef<HTMLDivElement | null>(null)
+  const isMobileRef = useRef<boolean>(false)
 
   const g1 = useRef<HTMLDivElement | null>(null)
   const fromRef = useRef<HTMLDivElement | null>(null)
@@ -79,8 +83,11 @@ export default function StoryCanvas() {
   const outroRef = useRef<HTMLDivElement | null>(null)
   const headlineRef = useRef<HTMLHeadingElement | null>(null)
   const sideCopyRef = useRef<HTMLDivElement | null>(null)
+  const outroMobileRef = useRef<HTMLDivElement | null>(null)
 
   useLayoutEffect(() => {
+    isMobileRef.current = typeof window !== "undefined" && window.innerWidth <= 640
+
     let removeListener: (() => void) | null = null
     const ctx = gsap.context(() => {
       gsap.set(pin.current, { willChange: "transform, opacity" })
@@ -115,7 +122,9 @@ export default function StoryCanvas() {
         if (!curtainRef.current) return
         curtainRef.current.style.clipPath = "none"
         curtainRef.current.style.webkitClipPath = "none"
-        if (clipPathRef.current) clipPathRef.current.setAttribute("d", RECT_PATH)
+        if (clipPathRef.current && !isMobileRef.current) {
+          clipPathRef.current.setAttribute("d", RECT_PATH)
+        }
         clipReleased = true
       }
 
@@ -127,13 +136,24 @@ export default function StoryCanvas() {
       }
 
       const applyClip = () => {
-        if (!clipPathRef.current) return
-        if (clipState.value >= 2.0) {
-          releaseClip()
-          return
+        if (isMobileRef.current) {
+          if (!curtainRef.current) return
+          if (clipState.value >= 2.0) {
+            releaseClip()
+            return
+          }
+          const mask = buildCircularMask(clipState.value)
+          curtainRef.current.style.WebkitMask = mask
+          curtainRef.current.style.mask = mask
+        } else {
+          if (!clipPathRef.current) return
+          if (clipState.value >= 2.0) {
+            releaseClip()
+            return
+          }
+          if (clipReleased) reapplyClip()
+          clipPathRef.current.setAttribute("d", buildClipPath(clipState.value))
         }
-        if (clipReleased) reapplyClip()
-        clipPathRef.current.setAttribute("d", buildClipPath(clipState.value))
       }
 
       applyClip()
@@ -151,16 +171,10 @@ export default function StoryCanvas() {
         )
       }
 
- tl.to(clipState, { value: 0.55, duration: 0.22, ease: "power2.inOut", onUpdate: applyClip }, 0)
-
-// Extended flip phase with stronger post-flip drift (progress 0.55 → 1.20)
-tl.to(clipState, { value: 1.2, duration: 0.52, ease: "power2.out", onUpdate: applyClip }, 0.22)
-
-// Curtain lifts and fades while background stays fixed
-tl.to(curtainRef.current, { yPercent: -16, autoAlpha: 0, duration: 0.38, ease: "power2.inOut" }, 0.22)
-
-// Remove clip from curtain shortly after fade completes
-tl.call(releaseClip, undefined, 0.62)
+      tl.to(clipState, { value: 0.55, duration: 0.22, ease: "power2.inOut", onUpdate: applyClip }, 0)
+      tl.to(clipState, { value: 1.2, duration: 0.52, ease: "power2.out", onUpdate: applyClip }, 0.22)
+      tl.to(curtainRef.current, { yPercent: -16, autoAlpha: 0, duration: 0.38, ease: "power2.inOut" }, 0.22)
+      tl.call(releaseClip, undefined, 0.62)
 
       const transitionTimings = [
         { time: TIMINGS.g1Copy, image: TRANSITION_SEQUENCE[0] },
@@ -196,9 +210,6 @@ tl.call(releaseClip, undefined, 0.62)
         Math.max(0, TIMINGS.g3Exit - 0.08),
       )
 
-      //tl.to(sceneRef.current, { opacity: 0, duration: 0.15, ease: "power1.inOut" }, TIMINGS.g3Exit - 0.05)
-      //tl.to(sceneRef.current, { opacity: 1, duration: 0.15, ease: "power1.inOut" }, TIMINGS.g3Exit + 0.1)
-
       const riseIn = (el: Element | null, at: number, dur = 0.1, y = 36, extra?: gsap.TweenVars) => {
         if (!el) return
         tl.fromTo(
@@ -228,7 +239,6 @@ tl.call(releaseClip, undefined, 0.62)
         tl.to(path, { strokeDashoffset: 0, duration: dur, ease: "none", ...(extra?.to ?? {}) }, at + 0.02)
       }
 
-      // pin remains static; ensure it's visible
       tl.set(pin.current, { autoAlpha: 1 }, Math.max(0, TIMINGS.g1Copy - 0.02))
 
       riseIn(fromRef.current, TIMINGS.g1Copy + 0.08, 0.1)
@@ -279,6 +289,12 @@ tl.call(releaseClip, undefined, 0.62)
 
       tl.set(outroRef.current, { opacity: 1 }, TIMINGS.outroStart)
       tl.set(sceneRef.current, { opacity: 1 }, TIMINGS.outroStart)
+      
+      // Show mobile content section on mobile when outro starts (with 2 second delay)
+      if (isMobileRef.current && outroMobileRef.current) {
+        gsap.set(outroMobileRef.current, { autoAlpha: 0 })
+        tl.set(outroMobileRef.current, { autoAlpha: 1 }, TIMINGS.outroStart + 2.0)
+      }
 
       const shrinkDur = 1.6
 
@@ -319,32 +335,64 @@ tl.call(releaseClip, undefined, 0.62)
             if (!stage) return
             const stageW = stage.clientWidth
             const stageH = stage.clientHeight
-            const targetW = stageW * 0.24
-            const targetH = targetW * 1.2
-            const leftInset = Math.max((stageW - targetW) / 2, 0)
-            const rightInset = leftInset
-            const topInset = Math.max(stageH * 0.18, 0)
-            const bottomInset = Math.max(stageH - topInset - targetH, 0)
-            const clip = `inset(${topInset}px ${rightInset}px ${bottomInset}px ${leftInset}px round 14px)`
-            gsap.set(sceneRef.current, {
-              willChange: "opacity, transform, clip-path",
-              transformOrigin: "50% 22%",
-              clipPath: "inset(0px 0px 0px 0px)",
-              opacity: 1,
-            })
-            tl.to(
-              sceneRef.current,
-              {
-                scale: 1.0,
-                y: 0,
-                clipPath: clip,
-                borderRadius: 14,
-                boxShadow: "0 16px 48px rgba(0,0,0,.28)",
-                duration: shrinkDur,
-                ease: "power3.inOut",
-              },
-              TIMINGS.outroStart,
-            )
+            const isMobile = stageW <= 640
+            
+            if (isMobile) {
+              const targetW = stageW * 0.70
+              const targetH = targetW * 1.2
+              const horizontalInset = Math.max((stageW - targetW) / 2, 0)
+              const topInset = Math.max(stageH * 0.32, 0)
+              const bottomInset = Math.max(stageH - topInset - targetH, 0)
+              const clip = `inset(${topInset}px ${horizontalInset}px ${bottomInset}px ${horizontalInset}px round 12px)`
+              
+              gsap.set(sceneRef.current, {
+                willChange: "opacity, transform, clip-path",
+                transformOrigin: "50% 16%",
+                clipPath: "inset(0px 0px 0px 0px)",
+                opacity: 1,
+              })
+              tl.to(
+                sceneRef.current,
+                {
+                  scale: 1.0,
+                  y: 0,
+                  clipPath: clip,
+                  borderRadius: 12,
+                  boxShadow: "0 8px 24px rgba(0,0,0,.16)",
+                  duration: shrinkDur,
+                  ease: "power3.inOut",
+                },
+                TIMINGS.outroStart,
+              )
+            } else {
+              const targetW = stageW * 0.24
+              const targetH = targetW * 1.2
+              const leftInset = Math.max((stageW - targetW) / 2, 0)
+              const rightInset = leftInset
+              const topInset = Math.max(stageH * 0.18, 0)
+              const bottomInset = Math.max(stageH - topInset - targetH, 0)
+              const clip = `inset(${topInset}px ${rightInset}px ${bottomInset}px ${leftInset}px round 14px)`
+              
+              gsap.set(sceneRef.current, {
+                willChange: "opacity, transform, clip-path",
+                transformOrigin: "50% 22%",
+                clipPath: "inset(0px 0px 0px 0px)",
+                opacity: 1,
+              })
+              tl.to(
+                sceneRef.current,
+                {
+                  scale: 1.0,
+                  y: 0,
+                  clipPath: clip,
+                  borderRadius: 14,
+                  boxShadow: "0 16px 48px rgba(0,0,0,.28)",
+                  duration: shrinkDur,
+                  ease: "power3.inOut",
+                },
+                TIMINGS.outroStart,
+              )
+            }
           },
           undefined,
           Math.max(0, TIMINGS.outroStart - 0.02),
@@ -414,12 +462,10 @@ tl.call(releaseClip, undefined, 0.62)
     <div ref={root} className="story-root">
       <svg width="0" height="0" className="defs" aria-hidden>
         <defs>
-         <mask id="storyRevealMask" maskContentUnits="objectBoundingBox">
-   {/* base white = show curtain everywhere */}
-   <rect x="0" y="0" width="1" height="1" fill="white" />
-   {/* black path = hole (transparent) */}
-   <path ref={clipPathRef} d={initialClipPath} fill="black" />
- </mask>
+          <mask id="storyRevealMask" maskContentUnits="objectBoundingBox">
+            <rect x="0" y="0" width="1" height="1" fill="white" />
+            <path ref={clipPathRef} d={initialClipPath} fill="black" />
+          </mask>
         </defs>
       </svg>
 
@@ -430,14 +476,14 @@ tl.call(releaseClip, undefined, 0.62)
           <div ref={sceneRef} className="scene" style={{ backgroundImage: `url(${TRANSITION_SEQUENCE[0]})` }} />
         </div>
 
-<div
-   ref={curtainRef}
-   className="curtain"
-   style={{
-     mask: "url(#storyRevealMask)",
-     WebkitMask: "url(#storyRevealMask)"
-   }}
- />
+        <div
+          ref={curtainRef}
+          className="curtain"
+          style={{
+            mask: "url(#storyRevealMask)",
+            WebkitMask: "url(#storyRevealMask)"
+          }}
+        />
 
         <div className="group1 copy" ref={g1}>
           <div className="from" ref={fromRef}>
@@ -535,11 +581,28 @@ tl.call(releaseClip, undefined, 0.62)
             </div>
           </div>
         </div>
+        
+        <div ref={outroMobileRef} className="outro-mobile-section">
+          <h2 className="outro-headline-mobile headline-inspired-mobile">
+            <span>Inspired by</span>
+          </h2>
+          <h2 className="outro-headline-mobile headline-earth-mobile">
+            <span>Earth&apos;s blueprints</span>
+          </h2>
+          <div className="outro-side-mobile">
+            <p>Reviving an elemental process to produce food for us all while sustaining our planet.</p>
+            <button className="outro-cta-mobile">
+              <span>Our</span>
+              <span className="dash" />
+              Process
+            </button>
+          </div>
+        </div>
       </div>
 
       <style jsx>{`
-  .story-root { position: relative; width: 100%; height: 800vh; background: #fcf7ea; color: #fff; }
-  .stage { position: sticky; top: 0; height: 100vh; width: 100%; overflow: hidden; isolation: isolate; will-change: clip-path; }
+  .story-root { position: relative; width: 100%; height: 800vh; background: #fcf7ea; color: #fff; z-index: 1; }
+  .stage { position: sticky; top: 0; height: 100vh; width: 100%; overflow: hidden; isolation: isolate; will-change: clip-path; z-index: 1; }
   .underlay { position: absolute; inset: 0; background: #ffffff; z-index: 0; }
   .scene { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: 1; z-index: 1; }
   .curtain { position: absolute; inset: 0; background: #fcf7ea; z-index: 2; }
@@ -602,6 +665,7 @@ tl.call(releaseClip, undefined, 0.62)
     gap: 12px;
     cursor: pointer;
     pointer-events: auto;
+    min-height: 44px;
   }
   .outro-cta .dash{ display:inline-block; width:36px; height:1px; background:currentColor; opacity:.6; }
 
@@ -634,48 +698,182 @@ tl.call(releaseClip, undefined, 0.62)
     white-space: normal;
   }
 
+  .scene-container {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
+
+  .outro-mobile-section {
+    display: none;
+  }
+
+  /* MOBILE (≤640px) */
   @media (max-width: 640px){
-    .story-root { height: 1200vh; }
-    .from { font-size: 7.2vw; } .from-line { width: 22vw; }
-    .palm { left: calc(8% + 22vw + 120px); font-size: 7.2vw; }
-    .arc { left: calc(8% + 22vw + 120px + 6vw); width: 26vw; height: 26vw; top: 33%; }
-    .craft { left: calc(8% + 22vw + 120px + 6vw + 26vw + 24px); max-width: 56vw; font-size: 5.4vw; }
-    .without { font-size: 4.6vw; }
-    .future-line { top: 24%; right: 10%; font-size: 4.2vw; max-width: 70vw; }
-    .dashed { top: 30%; right: 10%; width: 46vw; height: 36vw; }
-    .more-stack { left: 40%; top: 60%; font-size: 4.2vw; gap: 4px; }
-    .amp { font-size: 18vw; }
-    .more-inline { font-size: 4.2vw; }
-    .tail { top: 59%; left: 57%; max-width: 44vw; font-size: 4.2vw; }
-
-    :root{
-      --frame-top: 22vh;
-      --frame-w: 58vw;
-      --frame-h: calc(var(--frame-w) * 1.2);
-      --frame-left: calc((100vw - var(--frame-w)) / 2);
-      --baseline: calc(var(--frame-top) + var(--frame-h));
-      --col-gap: 6vw;
-    }
-
-    .outro-side{
-      top: calc(var(--baseline) + -1.2em);
-      left: 6vw;
-      width: 88vw;
-    }
-
-    .headline-inspired{
-      left: calc(var(--frame-left) - 34vw);
-      top:  calc(var(--baseline) - 1.2em);
-      font-size: 14vw;
-      white-space: normal;
-    }
-
-    .headline-earth{
-      top: calc(var(--baseline) + 8vh);
-      left: 6vw;
+    .story-root { height: 800vh; }
+    
+    .from { 
+      font-size: 7.2vw; 
+      top: 12%; 
+      left: 5.5%;
       max-width: 90vw;
-      font-size: 18vw;
+    } 
+    .from-line { 
+      width: 22vw; 
+      top: 55%;
+    }
+    .palm { 
+      left: 5.5%;
+      top: 18%;
+      font-size: 7.2vw; 
+      max-width: 90vw;
+    }
+    .arc { 
+      left: 5.5%;
+      width: 90vw;
+      height: 45vw;
+      top: 25%;
+    }
+    .craft { 
+      left: 5.5%;
+      top: 55%;
+      max-width: 90vw;
+      font-size: 5.8vw;
+      transform: none;
+    }
+    
+    .without { 
+      left: 5.5%; 
+      top: 14%;
+      font-size: 5.2vw; 
+      gap: 0.8rem 2vw;
+      max-width: 90vw;
+    }
+    
+    .future-line { 
+      top: 10%; 
+      right: auto;
+      left: 5.5%;
+      font-size: 5.2vw; 
+      max-width: 90vw; 
+    }
+    .dashed { 
+      top: 24%; 
+      right: auto;
+      left: 5.5%;
+      width: 90vw; 
+      height: 40vw; 
+    }
+    .more-stack { 
+      left: 5.5%;
+      top: 56%;
+      font-size: 5.2vw;
+      gap: 6px;
+      max-width: 90vw;
+    }
+    .amp { font-size: 20vw; }
+    .more-inline { font-size: 5.2vw; }
+    .tail { 
+      top: 72%;
+      left: 5.5%;
+      max-width: 90vw;
+      font-size: 5.2vw;
+    }
+
+    .outro-headline,
+    .outro-side,
+    .outro-cta,
+    .headline-inspired,
+    .headline-earth {
+      display: none;
+    }
+
+    .story-root {
+      overflow: visible;
+    }
+    
+    .stage {
+      z-index: 1;
+    }
+    
+    .outro-mobile-section {
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      width: 100%;
+      padding: 2vh 5.5vw 0.5vh;
+      background-color: #ffffff;
+      z-index: 100;
+      margin-top: 0;
+      max-height: 30vh;
+      overflow-y: auto;
+      pointer-events: auto;
+      transform: translateZ(0);
+      -webkit-transform: translateZ(0);
+      box-shadow: none;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+    }
+
+    .outro-headline-mobile {
+      margin: 0 0 0.5vh 0;
+      color: #3c1915;
+      font-family: 'Dancing Script', cursive;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      line-height: 0.92;
+      text-align: left;
+    }
+
+    .headline-inspired-mobile {
+      font-size: clamp(18px, 7vw, 50px);
       white-space: normal;
+      margin-bottom: 0.3vh;
+    }
+
+    .headline-earth-mobile {
+      font-size: clamp(20px, 8vw, 60px);
+      white-space: normal;
+      margin-bottom: 1.5vh;
+    }
+
+    .outro-side-mobile {
+      width: 100%;
+      color: #3c1915;
+      font-family: ui-serif, Georgia, Times, serif;
+      font-size: clamp(12px, 3.2vw, 15px);
+      line-height: 1.4;
+      text-align: left;
+    }
+
+    .outro-side-mobile p {
+      margin: 0 0 10px 0;
+    }
+
+    .outro-cta-mobile {
+      margin-top: 6px;
+      background: #efe4d2;
+      color: #3c1915;
+      border: none;
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: clamp(11px, 3vw, 13px);
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      pointer-events: auto;
+      min-height: 44px;
+    }
+
+    .outro-cta-mobile .dash {
+      display: inline-block;
+      width: 36px;
+      height: 1px;
+      background: currentColor;
+      opacity: 0.6;
     }
   }
 
@@ -692,22 +890,7 @@ tl.call(releaseClip, undefined, 0.62)
   .headline-earth{
     left: calc(var(--frame-left) - 14vw) !important;
     font-size: clamp(30px, 9.2vw, 140px) !important;
-  }
-
-  .scene-container {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-  }
-
-  .scene {
-    position: absolute;
-    inset: 0;
-    background-size: cover;
-    background-position: center;
-    will-change: opacity;
-  }
-`}</style>
-    </div>
-  )
+  }`}</style>
+  </div>
+)
 }
